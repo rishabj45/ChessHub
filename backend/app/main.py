@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost").split(",")
+
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
 API_VERSION = "v1"
 
