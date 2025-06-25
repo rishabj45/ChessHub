@@ -26,12 +26,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],  # ✅ Allow all
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 if not DEBUG:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
