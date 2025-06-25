@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Chess Tournament Management System - Organize and manage chess tournaments with teams, players, and matches" />
+    <meta name="keywords" content="chess, tournament, management, teams, players, matches, standings" />
+    <meta name="author" content="Chess Tournament System" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    
+    <!-- Open Graph Meta Tags for Social Media -->
+    <meta property="og:title" content="Chess Tournament Management System" />
+    <meta property="og:description" content="Professional chess tournament management with team standings, player rankings, and match scheduling" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="/" />
+    <meta property="og:image" content="/og-image.png" />
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Chess Tournament Management System" />
+    <meta name="twitter:description" content="Professional chess tournament management with team standings, player rankings, and match scheduling" />
+    <meta name="twitter:image" content="/twitter-image.png" />
+    
+    <!-- Theme Color for Mobile Browsers -->
+    <meta name="theme-color" content="#1f2937" />
+    <meta name="msapplication-TileColor" content="#1f2937" />
+    
+    <!-- Preconnect to External Domains for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <!-- Chess Icons Font (Font Awesome Chess subset) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <title>Chess Tournament Management System</title>
+    
+    <!-- Inline Critical CSS for Performance -->
+    <style>
+        /* Critical CSS for initial page load */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            line-height: 1.5;
+        }
+        
+        #root {
+            min-height: 100vh;
+            width: 100%;
+        }
+        
+        /* Loading Animation */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .loading-subtext {
+            font-size: 14px;
+            opacity: 0.8;
+            text-align: center;
+            max-width: 300px;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Chess piece animation */
+        .chess-pieces {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            opacity: 0.1;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateX(-50%) translateY(0px); }
+            50% { transform: translateX(-50%) translateY(-10px); }
+        }
+        
+        /* Error State */
+        .error-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #fef2f2;
+            color: #dc2626;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .error-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .error-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .error-message {
+            font-size: 16px;
+            margin-bottom: 20px;
+            max-width: 400px;
+        }
+        
+        .retry-button {
+            background-color: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .retry-button:hover {
+            background-color: #b91c1c;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 640px) {
+            .loading-text {
+                font-size: 16px;
+            }
+            
+            .loading-subtext {
+                font-size: 12px;
+                padding: 0 20px;
+            }
+            
+            .chess-pieces {
+                font-size: 20px;
+            }
+        }
+    </style>
+  <script type="module" crossorigin src="/assets/index-Cpd93tMj.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-e6QgQ2bV.css">
+</head>
+<body>
+    <!-- Main React App Container -->
+    <div id="root">
+        <!-- Loading State (shown until React app loads) -->
+        <div class="loading-container" id="loading-state">
+            <div class="chess-pieces">
+                <i class="fas fa-chess-king"></i>
+                <i class="fas fa-chess-queen"></i>
+                <i class="fas fa-chess-rook"></i>
+                <i class="fas fa-chess-bishop"></i>
+                <i class="fas fa-chess-knight"></i>
+                <i class="fas fa-chess-pawn"></i>
+            </div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Chess Tournament System</div>
+            <div class="loading-subtext">Loading tournament management interface...</div>
+        </div>
+    </div>
+
+    <!-- Error Fallback (shown if React fails to load) -->
+    <div class="error-container" id="error-state" style="display: none;">
+        <div class="error-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="error-title">Unable to Load Tournament</div>
+        <div class="error-message">
+            There was an error loading the chess tournament management system. 
+            Please check your internet connection and try again.
+        </div>
+        <button class="retry-button" onclick="window.location.reload()">
+            <i class="fas fa-redo"></i> Retry
+        </button>
+    </div>
+
+    <!-- Performance and SEO Script -->
+    <script>
+        // Hide loading state once React app loads
+        window.addEventListener('load', function() {
+            const loadingState = document.getElementById('loading-state');
+            if (loadingState) {
+                loadingState.style.display = 'none';
+            }
+        });
+
+        // Error handling for failed script loading
+        window.addEventListener('error', function(e) {
+            console.error('Script loading error:', e);
+            const loadingState = document.getElementById('loading-state');
+            const errorState = document.getElementById('error-state');
+            
+            if (loadingState) loadingState.style.display = 'none';
+            if (errorState) errorState.style.display = 'flex';
+        });
+
+        // Service Worker Registration (for PWA features)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(function(registrationError) {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // Performance monitoring
+        window.addEventListener('load', function() {
+            if ('performance' in window) {
+                const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+                console.log('Page load time:', loadTime, 'ms');
+            }
+        });
+
+        // Theme detection and application
+        function applyTheme() {
+            const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (isDarkMode) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+        
+        // Apply theme immediately
+        applyTheme();
+        
+        // Listen for theme changes
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+        }
+    </script>
+
+    <!-- Module Script for Vite/React -->
+</body>
+</html>

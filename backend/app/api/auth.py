@@ -1,7 +1,7 @@
 # backend/app/api/auth.py
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from app.auth_utils import (
+from ..auth_utils import (
     get_current_user,
     create_token,
 )
