@@ -6,6 +6,8 @@ import os, logging
 from .database import engine, Base
 from .api import tournaments, teams, players, matches,auth
 from dotenv import load_dotenv; load_dotenv()
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,6 +51,15 @@ app.include_router(teams.router)
 app.include_router(players.router)
 app.include_router(matches.router)
 
+# At bottom of main.py, after routers:
+frontend_path = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
+app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
+
+# Optional: fallback to index.html (React Router)
+@app.get("/{full_path:path}")
+def spa_fallback():
+    return FileResponse(os.path.join(frontend_path, "index.html"))
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
@@ -56,3 +67,4 @@ def health_check():
 @app.get("/")
 def root():
     return {"message": "Chess Tournament API", "version": API_VERSION}
+
