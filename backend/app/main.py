@@ -59,12 +59,3 @@ app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
 @app.get("/{full_path:path}")
 def spa_fallback():
     return FileResponse(os.path.join(frontend_path, "index.html"))
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-
-@app.get("/")
-def root():
-    return {"message": "Chess Tournament API", "version": API_VERSION}
-
