@@ -35,11 +35,11 @@ class ApiService {
     return res.data;
   }
   async getTournaments(): Promise<Tournament[]> {
-    const res = await this.client.get('/tournaments');
+    const res = await this.client.get('/tournaments/');
     return res.data;
   }
   async createTournament(data: any): Promise<Tournament> {
-    const res = await this.client.post('/tournaments', data);
+    const res = await this.client.post('/tournaments/', data);
     return res.data;
   }
 async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
@@ -51,11 +51,11 @@ async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
 
   // -- Teams --
   async getTeams(): Promise<Team[]> {
-    const res = await this.client.get('/teams');
+    const res = await this.client.get('/teams/');
     return res.data;
   }
   async createTeam(team: Team): Promise<Team> {
-    const res = await this.client.post('/teams', team);
+    const res = await this.client.post('/teams/', team);
     return res.data;
   }
   async updateTeam(teamId: number, team: Team): Promise<Team> {
@@ -65,7 +65,7 @@ async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
 
   // -- Players (example) --
   async getPlayers(): Promise<Player[]> {
-    const res = await this.client.get('/players');
+    const res = await this.client.get('/players/');
     return res.data;
   }
   // api.ts
