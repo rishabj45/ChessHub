@@ -32,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 if not DEBUG:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 @app.on_event("startup")
 def on_startup():
