@@ -1,7 +1,7 @@
 # === Python / Flask Backend ===
 backend/__pycache__/
 backend/*.py[cod]
-backend/chess_tournament.db
+# backend/chess_tournament.db
 backend/chess_tournament.log
 backend/.env
 backend/.pytest_cache/
