@@ -1,7 +1,7 @@
 # === Python / Flask Backend ===
 backend/__pycache__/
 backend/*.py[cod]
-# backend/chess_tournament.db
+backend/chess_tournament.db
 backend/chess_tournament.log
 backend/.env
 backend/.pytest_cache/
@@ -14,13 +14,7 @@ backend/alembic/versions/*.pyc
 
 # === Python Test Artifacts ===
 .pytest_cache/
-project_dump.txt
-project_tree.txt
-dump_content.py
-database_management_guide.txt
-dump_db.py
 .env
-.env.example
 
 # === Node / React Frontend ===
 frontend/node_modules/

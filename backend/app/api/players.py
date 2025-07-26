@@ -10,7 +10,7 @@ from .. import crud
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
-@router.get("/", response_model=List[PlayerResponse])
+@router.get("", response_model=List[PlayerResponse])
 def list_players(team_id: Optional[int] = None, tournament_id: Optional[int] = None,
                  db: Session = Depends(get_db)):
     """Get all players, optionally filtered."""

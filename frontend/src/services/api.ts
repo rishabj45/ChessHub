@@ -1,4 +1,6 @@
 // frontend/src/services/api.ts
+/// <reference types="vite/client" />
+
 import axios, { AxiosInstance } from 'axios';
 import {
   Tournament, Team, Player, MatchResponse, StandingsResponse, BestPlayersResponse,
@@ -9,7 +11,10 @@ class ApiService {
   private client: AxiosInstance;
 
   constructor() {
-    this.client = axios.create({ baseURL: '/api' });
+    this.client = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+});
+
 
     // Attach interceptor once here
     this.client.interceptors.request.use(
