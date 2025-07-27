@@ -11,9 +11,8 @@ const MatchResult = ({ match, onClose, players }) => {
     const submitResults = async () => {
         try {
             for (const r of results) {
-                if (r.result !== "pending") {
-                    await apiService.submitBoardResult(match.id, r.board, { result: r.result });
-                }
+                // Always submit the result, including "pending" to reset games
+                await apiService.submitBoardResult(match.id, r.board, { result: r.result });
             }
             onClose();
         }
@@ -36,6 +35,6 @@ const MatchResult = ({ match, onClose, players }) => {
                                         ? getPlayerName(game.black_player_id)
                                         : game.result === "draw"
                                             ? "Draw"
-                                            : "Pending"] }))] }, game.id))), _jsx("button", { className: "mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700", onClick: submitResults, children: "Submit Results" })] }) }));
+                                            : "Pending"] }))] }, game.id))), _jsx("button", { className: "mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700", onClick: submitResults, children: "Update Results" })] }) }));
 };
 export default MatchResult;

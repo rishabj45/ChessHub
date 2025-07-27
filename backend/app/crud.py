@@ -13,8 +13,15 @@ def get_tournament(db: Session, tournament_id: int) -> Optional[models.Tournamen
 
 def get_current_tournament(db: Session) -> Optional[models.Tournament]:
     """
-    Get the most recently created tournament.
+    Get the tournament marked as current.
+    If none is marked as current, return the most recently created one.
     """
+    # First try to get the tournament marked as current
+    current = db.query(models.Tournament).filter(models.Tournament.is_current == True).first()
+    if current:
+        return current
+    
+    # Fallback to most recently created tournament
     return db.query(models.Tournament).order_by(models.Tournament.created_at.desc()).first()
 
 def get_tournaments(db: Session, skip: int = 0, limit: int = 100) -> List[models.Tournament]:
@@ -44,6 +51,21 @@ def delete_tournament(db: Session, tournament_id: int) -> bool:
     db.delete(tour)
     db.commit()
     return True
+
+def set_current_tournament(db: Session, tournament_id: int) -> Optional[models.Tournament]:
+    """Set a tournament as the current one, unsetting all others."""
+    # First, unset all current tournaments
+    db.query(models.Tournament).update({models.Tournament.is_current: False})
+    
+    # Then set the specified tournament as current
+    tour = get_tournament(db, tournament_id)
+    if not tour:
+        return None
+    
+    tour.is_current = True
+    db.commit()
+    db.refresh(tour)
+    return tour
 
 # -- Team CRUD --
 def get_team(db: Session, team_id: int) -> Optional[models.Team]:

@@ -58,13 +58,18 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
                     <span className="font-semibold">{team.name}</span>
                   </div>
 
-                  {isAdmin && (
+                  {isAdmin && tournament?.stage === 'not_yet_started' && (
                     <button
                       className="px-2 py-1 border rounded text-blue-500"
                       onClick={() => handleEdit(team)}
                     >
                       Edit
                     </button>
+                  )}
+                  {isAdmin && tournament?.stage !== 'not_yet_started' && (
+                    <span className="px-2 py-1 text-gray-400 text-sm">
+                      Editing Disabled
+                    </span>
                   )}
                 </div>
 
@@ -97,6 +102,7 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
           onClose={() => setShowEditor(false)}
           onSave={handleSave}
           isAdmin={isAdmin}
+          tournamentStage={tournament?.stage}
         />
       )}
     </div>

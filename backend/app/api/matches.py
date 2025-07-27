@@ -5,16 +5,29 @@ from typing import List
 from ..schemas import GameSimpleResultUpdate
 from ..models import Game, Match , Round , Player
 from ..database import get_db
-from ..schemas import MatchResponse , GameSimpleResultUpdate , MatchRescheduleRequest ,SwapPlayersRequest
+from ..schemas import MatchResponse , GameSimpleResultUpdate , MatchRescheduleRequest ,SwapPlayersRequest, MatchSwapRequest
 from ..auth_utils import get_current_user
 from .. import crud
+from ..tournament_logic import recalculate_tournament_stats
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 
-@router.get("/{round_id}", response_model=List[MatchResponse])
-def get_matches(round_id: int, db: Session = Depends(get_db)):
-    """Get all matches for a round."""
-    return crud.get_matches(db, round_id=round_id)
+@router.get("/{tournament_id}/{round_number}", response_model=List[MatchResponse])
+def get_matches(tournament_id: int, round_number: int, db: Session = Depends(get_db)):
+    """Get all matches for a specific round in a specific tournament."""
+    # First get the round ID for this tournament and round number
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Round {round_number} not found for tournament {tournament_id}"
+        )
+    
+    return crud.get_matches(db, round_id=round_obj.id)
 
 @router.post("/{match_id}/board/{board_number}/result")
 def submit_board_result(
@@ -32,48 +45,39 @@ def submit_board_result(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    # Allow changing results anytime - no completion check
+
     # 🧮 Convert result string to scores
     if update.result == "white_win":
         game.white_score = 1.0
         game.black_score = 0.0
+        game.result = update.result
+        game.is_completed = True
     elif update.result == "black_win":
         game.white_score = 0.0
         game.black_score = 1.0
-    else:  # draw
+        game.result = update.result
+        game.is_completed = True
+    elif update.result == "draw":
         game.white_score = 0.5
         game.black_score = 0.5
-    game.result = update.result
-    game.is_completed = True
+        game.result = update.result
+        game.is_completed = True
+    elif update.result == "pending":
+        # Reset game to pending state
+        game.white_score = 0.0
+        game.black_score = 0.0
+        game.result = None
+        game.is_completed = False
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid result: {update.result}")
+    
     db.commit()
 
-    # 🎯 Check match status
+    # 🔄 Recalculate all tournament statistics after result change
     match = db.query(Match).filter(Match.id == match_id).first()
-    if not match:
-        raise HTTPException(status_code=404, detail="Match not found")
-    match.white_score = sum(g.white_score for g in match.games)
-    match.black_score = sum(g.black_score for g in match.games)
-    if all(g.is_completed for g in match.games):
-        if match.white_score > match.black_score:
-            match.result = "white_win"
-        elif match.black_score > match.white_score:
-            match.result = "black_win"
-        else:
-            match.result = "draw"
-
-        match.is_completed = True
-    db.commit()
-    round_matches = db.query(Match).filter(Match.round_id == match.round_id).all()
-    if all(m.is_completed for m in round_matches):
-        match.round.is_completed = True
-        db.commit()
-        completed = db.query(Round).filter(
-            Round.tournament_id == match.tournament_id,
-            Round.is_completed == True
-        ).count()
-        tournament = crud.get_tournament(db, match.tournament_id)
-        if tournament:
-            tournament.current_round = completed + 1
-            db.commit()
+    if match:
+        recalculate_tournament_stats(db, match.tournament_id)
 
     return {"message": f"Game result '{update.result}' submitted successfully"}
 
@@ -139,12 +143,18 @@ def swap_players(
     game = db.query(Game).filter(Game.id == game_id, Game.match_id == match_id).first()
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    if game.is_completed:
-        raise HTTPException(status_code=400, detail="Cannot swap players after result is submitted.")
+    
+    # Removed completion checks to allow swaps anytime
+    # if game.is_completed:
+    #     raise HTTPException(status_code=400, detail="Cannot swap players after result is submitted.")
 
     match = db.query(Match).filter(Match.id == match_id).first()
-    if not match or match.is_completed:
-        raise HTTPException(status_code=400, detail="Match not found or already completed")
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Removed match completion check
+    # if match.is_completed:
+    #     raise HTTPException(status_code=400, detail="Match not found or already completed")
 
     if swap_data.new_white_player_id:
         player = db.query(Player).filter(Player.id == swap_data.new_white_player_id).first()
@@ -158,6 +168,103 @@ def swap_players(
             raise HTTPException(status_code=400, detail="Invalid black player for this match")
         game.black_player_id = player.id
 
+    # Keep the existing game result - don't reset it
+    # The result represents what happened in this game position/board
+    # regardless of which specific players are currently assigned
 
     db.commit()
-    return {"message": "Players swapped successfully"}
+    
+    # 🔄 Recalculate all tournament statistics after player swap
+    recalculate_tournament_stats(db, match.tournament_id)
+
+    return {"message": "Players swapped successfully, result preserved"}
+
+@router.post("/{match_id}/swap-players")
+def swap_match_players(
+    match_id: int,
+    swap_data: MatchSwapRequest,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user)
+):
+    """Swap players at the match level - can swap board positions and substitute players"""
+    match = db.query(Match).filter(Match.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Get all games for this match
+    games = db.query(Game).filter(Game.match_id == match_id).order_by(Game.board_number).all()
+    if not games:
+        raise HTTPException(status_code=400, detail="No games found for this match")
+    
+    # Process white team swaps
+    for swap in swap_data.white_team_swaps:
+        player1 = db.query(Player).filter(Player.id == swap.player1_id).first()
+        player2 = db.query(Player).filter(Player.id == swap.player2_id).first()
+        
+        if not player1 or not player2:
+            raise HTTPException(status_code=400, detail="One or both players not found")
+        
+        if player1.team_id != match.white_team_id or player2.team_id != match.white_team_id:
+            raise HTTPException(status_code=400, detail="Players must be from the white team")
+        
+        # Find games where these players are currently assigned
+        game1 = None
+        game2 = None
+        for game in games:
+            if game.white_player_id == player1.id:
+                game1 = game
+            elif game.white_player_id == player2.id:
+                game2 = game
+        
+        # Perform the swap based on what positions they're in
+        if game1 and game2:
+            # Both playing - swap board positions
+            game1.white_player_id = player2.id
+            game2.white_player_id = player1.id
+        elif game1 and not game2:
+            # Player1 playing, Player2 substitute - substitute them
+            game1.white_player_id = player2.id
+        elif not game1 and game2:
+            # Player1 substitute, Player2 playing - substitute them
+            game2.white_player_id = player1.id
+        # If neither playing (both substitutes), ignore this swap
+    
+    # Process black team swaps
+    for swap in swap_data.black_team_swaps:
+        player1 = db.query(Player).filter(Player.id == swap.player1_id).first()
+        player2 = db.query(Player).filter(Player.id == swap.player2_id).first()
+        
+        if not player1 or not player2:
+            raise HTTPException(status_code=400, detail="One or both players not found")
+        
+        if player1.team_id != match.black_team_id or player2.team_id != match.black_team_id:
+            raise HTTPException(status_code=400, detail="Players must be from the black team")
+        
+        # Find games where these players are currently assigned
+        game1 = None
+        game2 = None
+        for game in games:
+            if game.black_player_id == player1.id:
+                game1 = game
+            elif game.black_player_id == player2.id:
+                game2 = game
+        
+        # Perform the swap based on what positions they're in
+        if game1 and game2:
+            # Both playing - swap board positions
+            game1.black_player_id = player2.id
+            game2.black_player_id = player1.id
+        elif game1 and not game2:
+            # Player1 playing, Player2 substitute - substitute them
+            game1.black_player_id = player2.id
+        elif not game1 and game2:
+            # Player1 substitute, Player2 playing - substitute them
+            game2.black_player_id = player1.id
+        # If neither playing (both substitutes), ignore this swap
+    
+    db.commit()
+    
+    # 🔄 Recalculate all tournament statistics after player swap
+    recalculate_tournament_stats(db, match.tournament_id)
+
+    return {"message": "Match players swapped successfully, results preserved"}

@@ -1,5 +1,5 @@
 // frontend/src/types/index.ts
-export type TabType = 'teams' | 'schedule' | 'standings' | 'bestPlayers';
+export type TabType = 'home' | 'teams' | 'schedule' | 'standings' | 'bestPlayers' | 'tournaments';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -24,11 +24,26 @@ export interface Tournament {
   id: number;
   name: string;
   description?: string;
+  venue?: string;
   start_date: string;
   end_date: string;
-  status: string;
   current_round: number;
   total_rounds: number;
+  format?: TournamentFormat;
+  stage: string; // not_yet_started, group, semi_final, final, completed
+}
+
+export type TournamentFormat = 'round_robin' | 'group_knockout';
+
+export interface TournamentCreate {
+  name: string;
+  description?: string;
+  venue?: string;
+  start_date?: string;
+  end_date?: string;
+  team_names: string[];
+  players_per_team: number[];
+  format: TournamentFormat;
 }
 
 export interface Team {

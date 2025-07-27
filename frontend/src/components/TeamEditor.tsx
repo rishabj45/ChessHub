@@ -9,9 +9,10 @@ interface TeamEditorProps {
   onClose: () => void;
   onSave: (team: Team) => void;
   isAdmin: boolean;
+  tournamentStage?: string;
 }
 
-const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, isAdmin }) => {
+const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, isAdmin, tournamentStage }) => {
   const [name, setName] = useState(team.name);
   const [players, setPlayers] = useState<Player[]>([]);
   const [originalPlayers, setOriginalPlayers] = useState<Player[]>([]);
@@ -19,6 +20,9 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   const [newPlayerRating, setNewPlayerRating] = useState<number | ''>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Check if editing is disabled (tournament has started)
+  const isEditingDisabled = tournamentStage !== 'not_yet_started';
 
   // Load team players when component opens
   useEffect(() => {
@@ -203,6 +207,12 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
           </div>
         )}
 
+        {isEditingDisabled && (
+          <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+            <strong>⚠️ Tournament has started</strong> - Teams and players cannot be edited after the tournament begins.
+          </div>
+        )}
+
         {isLoading && (
           <div className="mb-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
             Loading...
@@ -212,10 +222,10 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
         <div className="mb-4">
           <label className="block mb-1 font-medium text-gray-700">Team Name:</label>
           <input
-            className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:border-blue-500"
+            className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             value={name}
             onChange={e => setName(e.target.value)}
-            disabled={isLoading}
+            disabled={isLoading || isEditingDisabled}
             placeholder="Enter team name"
           />
         </div>
@@ -231,20 +241,20 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
                 <div key={player.id ?? index} className="flex items-center space-x-2 p-2 border border-gray-200 rounded">
                   <div className="flex-1">
                     <input
-                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500"
+                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       value={player.name}
                       onChange={e => updatePlayerName(index, e.target.value)}
-                      disabled={isLoading}
+                      disabled={isLoading || isEditingDisabled}
                       placeholder="Player name"
                     />
                   </div>
                   <div className="w-20">
                     <input
                       type="number"
-                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500"
+                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       value={player.rating || ''}
                       onChange={e => updatePlayerRating(index, e.target.value)}
-                      disabled={isLoading}
+                      disabled={isLoading || isEditingDisabled}
                       placeholder="Rating"
                       min="0"
                       max="3000"
@@ -252,9 +262,15 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
                   </div>
                   <button
                     onClick={() => removePlayer(index)}
-                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                    disabled={isLoading || players.length <= 4}
-                    title={players.length <= 4 ? "Minimum 4 players required" : "Remove player"}
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isLoading || players.length <= 4 || isEditingDisabled}
+                    title={
+                      isEditingDisabled 
+                        ? "Cannot edit after tournament starts"
+                        : players.length <= 4 
+                          ? "Minimum 4 players required" 
+                          : "Remove player"
+                    }
                   >
                     <Trash2 size={16} />
                   </button>
@@ -266,42 +282,44 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
           )}
 
           {/* Add new player form */}
-          <div className="border-t pt-3">
-            <div className="flex items-center space-x-2">
-              <input
-                className="flex-1 border border-gray-300 px-3 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
-                placeholder="New player name"
-                value={newPlayerName}
-                onChange={e => setNewPlayerName(e.target.value)}
-                disabled={isLoading || players.length >= 6}
-                onKeyPress={e => e.key === 'Enter' && addPlayer()}
-              />
-              <input
-                type="number"
-                className="w-20 border border-gray-300 px-2 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
-                placeholder="Rating"
-                value={newPlayerRating}
-                onChange={e =>
-                  setNewPlayerRating(e.target.value === '' ? '' : parseInt(e.target.value))
-                }
-                disabled={isLoading || players.length >= 6}
-                min="0"
-                max="3000"
-                onKeyPress={e => e.key === 'Enter' && addPlayer()}
-              />
-              <button
-                className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={addPlayer}
-                disabled={!newPlayerName.trim() || isLoading || players.length >= 6}
-                title={players.length >= 6 ? "Maximum 6 players allowed" : "Add player"}
-              >
-                <Plus size={16} />
-              </button>
+          {!isEditingDisabled && (
+            <div className="border-t pt-3">
+              <div className="flex items-center space-x-2">
+                <input
+                  className="flex-1 border border-gray-300 px-3 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="New player name"
+                  value={newPlayerName}
+                  onChange={e => setNewPlayerName(e.target.value)}
+                  disabled={isLoading || players.length >= 6}
+                  onKeyPress={e => e.key === 'Enter' && addPlayer()}
+                />
+                <input
+                  type="number"
+                  className="w-20 border border-gray-300 px-2 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="Rating"
+                  value={newPlayerRating}
+                  onChange={e =>
+                    setNewPlayerRating(e.target.value === '' ? '' : parseInt(e.target.value))
+                  }
+                  disabled={isLoading || players.length >= 6}
+                  min="0"
+                  max="3000"
+                  onKeyPress={e => e.key === 'Enter' && addPlayer()}
+                />
+                <button
+                  className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={addPlayer}
+                  disabled={!newPlayerName.trim() || isLoading || players.length >= 6}
+                  title={players.length >= 6 ? "Maximum 6 players allowed" : "Add player"}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {players.length >= 6 && (
+                <p className="text-sm text-orange-600 mt-1">Maximum 6 players per team</p>
+              )}
             </div>
-            {players.length >= 6 && (
-              <p className="text-sm text-orange-600 mt-1">Maximum 6 players per team</p>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="flex justify-end space-x-2 pt-4 border-t">
@@ -315,10 +333,10 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             onClick={save}
-            disabled={!name.trim() || isLoading}
+            disabled={!name.trim() || isLoading || isEditingDisabled}
           >
             <Save className="inline-block mr-1" size={16} />
-            {isLoading ? 'Saving...' : 'Save'}
+            {isLoading ? 'Saving...' : isEditingDisabled ? 'Read Only' : 'Save'}
           </button>
         </div>
       </div>

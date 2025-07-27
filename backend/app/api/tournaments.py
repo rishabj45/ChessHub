@@ -50,6 +50,15 @@ def delete_tournament(tournament_id: int, db: Session = Depends(get_db),
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
     return {"message": "Tournament deleted successfully"}
 
+@router.post("/{tournament_id}/set-current", response_model=TournamentResponse)
+def set_current_tournament(tournament_id: int, db: Session = Depends(get_db),
+                           _: dict = Depends(get_current_user)):
+    """Set a tournament as the current one (admin only)."""
+    updated = crud.set_current_tournament(db, tournament_id)
+    if not updated:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
+    return updated
+
 @router.get("/{tournament_id}/standings", response_model=StandingsResponse)
 def get_standings(tournament_id: int, db: Session = Depends(get_db)):
     tour = crud.get_tournament(db, tournament_id)
@@ -57,6 +66,19 @@ def get_standings(tournament_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
     standings = tournament_logic.calculate_standings(db, tournament_id)
     return StandingsResponse(standings=standings)
+
+@router.get("/{tournament_id}/group-standings")
+def get_group_standings(tournament_id: int, db: Session = Depends(get_db)):
+    """Get group standings for group+knockout format tournaments."""
+    tour = crud.get_tournament(db, tournament_id)
+    if not tour:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
+    
+    if tour.format != "group_knockout":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tournament is not in group+knockout format")
+    
+    group_standings = tournament_logic.calculate_group_standings(db, tournament_id)
+    return group_standings
 
 @router.get("/{tournament_id}/best-players", response_model=BestPlayersResponse)
 def get_best_players(tournament_id: int, db: Session = Depends(get_db)):
@@ -69,3 +91,74 @@ def get_best_players(tournament_id: int, db: Session = Depends(get_db)):
         tournament_name=tour.name,
         players=stats
     )
+
+@router.post("/{tournament_id}/start")
+def start_tournament_endpoint(tournament_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+    """Start a tournament (admin only) - changes stage from not_yet_started to group."""
+    success = tournament_logic.start_tournament(db, tournament_id)
+    if not success:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot start tournament - already started or insufficient teams")
+    return {"message": "Tournament started successfully"}
+
+@router.get("/{tournament_id}/can-complete")
+def can_complete_tournament(tournament_id: int, db: Session = Depends(get_db)):
+    """Check if tournament can be completed (final and 3rd place matches are done)."""
+    can_complete = tournament_logic.can_complete_tournament(db, tournament_id)
+    return {"can_complete": can_complete}
+
+@router.post("/{tournament_id}/complete")
+def complete_tournament(tournament_id: int, db: Session = Depends(get_db), 
+                       _: dict = Depends(get_current_user)):
+    """Complete the tournament (admin only)."""
+    success = tournament_logic.complete_tournament(db, tournament_id)
+    if not success:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            "Cannot complete tournament. Ensure final and 3rd place matches are completed."
+        )
+    return {"message": "Tournament completed successfully"}
+
+@router.get("/{tournament_id}/final-rankings")
+def get_final_rankings(tournament_id: int, db: Session = Depends(get_db)):
+    """Get final top 3 rankings for a completed tournament."""
+    rankings = tournament_logic.get_final_rankings(db, tournament_id)
+    if not rankings:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            "Cannot get final rankings. Tournament must be completed."
+        )
+    return rankings
+
+@router.get("/{tournament_id}/rounds/{round_number}/can-complete")
+def can_complete_round(tournament_id: int, round_number: int, db: Session = Depends(get_db)):
+    """Check if a specific round can be manually completed."""
+    result = tournament_logic.can_complete_round(db, tournament_id, round_number)
+    return result
+
+@router.post("/{tournament_id}/rounds/{round_number}/complete")
+def complete_round(tournament_id: int, round_number: int, db: Session = Depends(get_db), 
+                  _: dict = Depends(get_current_user)):
+    """Manually complete a specific round (admin only)."""
+    # First check if the round can be completed
+    check_result = tournament_logic.can_complete_round(db, tournament_id, round_number)
+    if not check_result["can_complete"]:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            f"Cannot complete round {round_number}: {check_result['reason']}"
+        )
+    
+    success = tournament_logic.manual_complete_round(db, tournament_id, round_number)
+    if not success:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            "Failed to complete round"
+        )
+    
+    # Final recalculation after potential automatic stage advancement
+    tournament_logic.recalculate_tournament_stats(db, tournament_id)
+    
+    # Include completion info in response
+    return {
+        "message": f"Round {round_number} completed successfully",
+        "round_info": check_result
+    }

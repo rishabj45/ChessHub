@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import Layout from './components/Layout';
-import Schedule from './components/Schedule';
-import  Standings  from './components/Standings';
-import Teams from './components/Teams';
-import BestPlayers from './components/BestPlayers';
-import LoginModal from './components/LoginModal';
-import { useAuth } from './hooks/useAuth';
-import { apiService as api } from './services/api';
-import { Tournament } from './types';
-import { TabType } from './types';
+import Layout from '@/components/Layout';
+import TournamentHome from '@/components/TournamentHome';
+import Schedule from '@/components/Schedule';
+import Standings from '@/components/Standings';
+import Teams from '@/components/Teams';
+import BestPlayers from '@/components/BestPlayers';
+import TournamentManager from '@/components/TournamentManager';
+import LoginModal from '@/components/LoginModal';
+import { Tournament, TabType } from '@/types';
+import { apiService as api } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('schedule');
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,10 @@ const App: React.FC = () => {
     try {
       const response = await api.getCurrentTournament();
       setTournament(response);
+      // Auto-switch to home tab after tournament creation/update
+      if (activeTab === 'tournaments') {
+        setActiveTab('home');
+      }
     } catch (err) {
       console.error('Error refreshing tournament:', err);
     }
@@ -63,9 +68,8 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-  logout();
-  if (adminMode) toggleAdminMode(); // reset to viewer mode
-};
+    logout();
+  };
   const renderTabContent = () => {
     if (loading) {
       return (
@@ -94,14 +98,18 @@ const App: React.FC = () => {
     }
 
     switch (activeTab) {
+      case 'home':
+        return <TournamentHome tournament={tournament} isAdmin={isAuthenticated && adminMode} onUpdate={handleTournamentUpdate} />;
       case 'schedule':
         return <Schedule isAdmin={isAuthenticated && adminMode} onUpdate={handleTournamentUpdate} tournament={tournament} />;
       case 'standings':
-        return <Standings  />;
+        return <Standings isAdmin={isAuthenticated && adminMode} onUpdate={handleTournamentUpdate} />;
       case 'teams':
         return <Teams isAdmin={isAuthenticated && adminMode} tournament={tournament} />;
       case 'bestPlayers':
         return <BestPlayers  />;
+      case 'tournaments':
+        return <TournamentManager isAdmin={isAuthenticated && adminMode} currentTournament={tournament} onTournamentChanged={handleTournamentUpdate} />;
       default:
         return null;
     }

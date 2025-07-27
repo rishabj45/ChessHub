@@ -31,6 +31,15 @@ def create_team(team: TeamCreate, db: Session = Depends(get_db), admin_user: dic
 @router.put("/{team_id}", response_model=TeamResponse)
 def update_team(team_id: int, team_upd: TeamUpdate, db: Session = Depends(get_db),
                 admin_user: dict = Depends(get_current_user)):
+    # Check if team exists and get tournament info
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
+    
+    # Check if tournament has started
+    if team.tournament.stage != "not_yet_started":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot edit team after tournament has started")
+    
     updated = crud.update_team(db, team_id, team_upd)
     if not updated:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")

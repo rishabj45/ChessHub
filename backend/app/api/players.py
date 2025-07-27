@@ -1,9 +1,11 @@
 ### backend/app/api/players.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 
 from ..database import get_db
+from ..models import Game
 from ..schemas import PlayerResponse, PlayerCreate, PlayerUpdate, BestPlayersResponse
 from ..auth_utils import get_current_user
 from .. import crud
@@ -29,8 +31,10 @@ def create_player(player: PlayerCreate, db: Session = Depends(get_db), _: dict =
     team = crud.get_team(db, player.team_id)
     if not team:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
-    if team.tournament.status == "completed":
+    if team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add player to completed tournament")
+    if team.tournament.stage != "not_yet_started":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add player after tournament has started")
     if crud.get_player_by_name_in_team(db, player.name, player.team_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Player name already exists in this team")
     if not player.position:
@@ -43,8 +47,10 @@ def update_player(player_id: int, upd: PlayerUpdate, db: Session = Depends(get_d
     p = crud.get_player(db, player_id)
     if not p:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
-    if p.team.tournament.status == "completed":
+    if p.team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot update player in completed tournament")
+    if p.team.tournament.stage != "not_yet_started":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot update player after tournament has started")
     if upd.name and upd.name != p.name:
         if crud.get_player_by_name_in_team(db, upd.name, p.team_id):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Player name already exists")
@@ -60,10 +66,24 @@ def delete_player(player_id: int, db: Session = Depends(get_db), _: dict = Depen
     p = crud.get_player(db, player_id)
     if not p:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
-    if p.team.tournament.status == "completed":
+    if p.team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete player from completed tournament")
+    if p.team.tournament.stage != "not_yet_started":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete player after tournament has started")
     if len(p.team.players) <= 4:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Team must have at least 4 players")
+    
+    # Check if player is assigned to any games
+    games_count = db.query(Game).filter(
+        or_(Game.white_player_id == player_id, Game.black_player_id == player_id)
+    ).count()
+    
+    if games_count > 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            f"Cannot delete player - assigned to {games_count} game(s). Use player swap to reassign first."
+        )
+    
     team_id, old_pos = p.team_id, p.position
     success = crud.delete_player(db, player_id)
     if not success:

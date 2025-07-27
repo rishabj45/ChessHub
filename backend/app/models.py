@@ -11,9 +11,11 @@ class Tournament(Base):
     description = Column(Text)
     start_date = Column(DateTime, default=func.now())
     end_date = Column(DateTime)
-    status = Column(String(50), default="active")
-    current_round = Column(Integer, default=1)
+    current_round = Column(Integer, default=0)  # 0 when not started, 1+ when started
     total_rounds = Column(Integer)
+    format = Column(String(50), default="round_robin")
+    stage = Column(String(50), default="not_yet_started")  # not_yet_started, group, semi_final, final, completed
+    is_current = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

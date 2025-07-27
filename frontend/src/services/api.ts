@@ -3,7 +3,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import {
-  Tournament, Team, Player, MatchResponse, StandingsResponse, BestPlayersResponse,
+  Tournament, TournamentCreate, Team, Player, MatchResponse, StandingsResponse, BestPlayersResponse,
   LoginRequest, AuthResponse , PlayerCreate, PlayerUpdate , SwapPlayersRequest, AvailableSwapsResponse
 } from '@/types';
 
@@ -43,10 +43,64 @@ class ApiService {
     const res = await this.client.get('/tournaments/');
     return res.data;
   }
-  async createTournament(data: any): Promise<Tournament> {
+  async createTournament(data: TournamentCreate): Promise<Tournament> {
     const res = await this.client.post('/tournaments/', data);
     return res.data;
   }
+
+  async setCurrentTournament(tournamentId: number): Promise<Tournament> {
+    const res = await this.client.post(`/tournaments/${tournamentId}/set-current`);
+    return res.data;
+  }
+
+  async deleteTournament(tournamentId: number): Promise<void> {
+    await this.client.delete(`/tournaments/${tournamentId}`);
+  }
+
+  async startTournament(tournamentId: number): Promise<{ message: string }> {
+    const res = await this.client.post(`/tournaments/${tournamentId}/start`);
+    return res.data;
+  }
+
+  // -- Tournament Stage Management --
+  async canCompleteTournament(tournamentId: number): Promise<{ can_complete: boolean }> {
+    const res = await this.client.get(`/tournaments/${tournamentId}/can-complete`);
+    return res.data;
+  }
+  
+  async completeTournament(tournamentId: number): Promise<{ message: string }> {
+    const res = await this.client.post(`/tournaments/${tournamentId}/complete`);
+    return res.data;
+  }
+
+  async getFinalRankings(tournamentId: number): Promise<any> {
+    const res = await this.client.get(`/tournaments/${tournamentId}/final-rankings`);
+    return res.data;
+  }
+
+  // -- Round Management --
+  async canCompleteRound(tournamentId: number, roundNumber: number): Promise<{
+    can_complete: boolean;
+    reason?: string;
+    round_number?: number;
+    total_matches?: number;
+    completed_matches?: number;
+    completion_percentage?: number;
+    missing_matches?: number;
+    message?: string;
+  }> {
+    const res = await this.client.get(`/tournaments/${tournamentId}/rounds/${roundNumber}/can-complete`);
+    return res.data;
+  }
+  
+  async completeRound(tournamentId: number, roundNumber: number): Promise<{
+    message: string;
+    round_info: any;
+  }> {
+    const res = await this.client.post(`/tournaments/${tournamentId}/rounds/${roundNumber}/complete`);
+    return res.data;
+  }
+
 async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
   await this.client.post(`/matches/rounds/${roundNumber}/reschedule`, {
     scheduled_date: new Date(datetime).toISOString(),
@@ -56,11 +110,11 @@ async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
 
   // -- Teams --
   async getTeams(): Promise<Team[]> {
-    const res = await this.client.get('/teams/');
+    const res = await this.client.get('/teams');
     return res.data;
   }
   async createTeam(team: Team): Promise<Team> {
-    const res = await this.client.post('/teams/', team);
+    const res = await this.client.post('/teams', team);
     return res.data;
   }
   async updateTeam(teamId: number, team: Team): Promise<Team> {
@@ -70,12 +124,12 @@ async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
 
   // -- Players (example) --
   async getPlayers(): Promise<Player[]> {
-    const res = await this.client.get('/players/');
+    const res = await this.client.get('/players');
     return res.data;
   }
   // api.ts
   async addPlayer(player: PlayerCreate): Promise<Player> {
-    const res = await this.client.post('/players/', player);
+    const res = await this.client.post('/players', player);
     return res.data;
   }
 
@@ -89,8 +143,8 @@ async rescheduleRound(roundNumber: number, datetime: string): Promise<void> {
   }
 
   // -- Matches --
-async getMatches(roundId: number): Promise<MatchResponse[]> {
-  const res = await this.client.get(`/matches/${roundId}`);
+async getMatches(tournamentId: number, roundNumber: number): Promise<MatchResponse[]> {
+  const res = await this.client.get(`/matches/${tournamentId}/${roundNumber}`);
   return res.data;
 }
 
@@ -107,6 +161,12 @@ async submitBoardResult(
     const tournament = await this.getCurrentTournament();
     const res = await this.client.get(`/tournaments/${tournament.id}/standings`);
 
+    return res.data;
+  }
+
+  async getGroupStandings(): Promise<{ group_a: any[], group_b: any[] }> {
+    const tournament = await this.getCurrentTournament();
+    const res = await this.client.get(`/tournaments/${tournament.id}/group-standings`);
     return res.data;
   }
   async getBestPlayers(): Promise<BestPlayersResponse> {
@@ -127,6 +187,14 @@ async swapGamePlayers(
   swapData: SwapPlayersRequest
 ): Promise<void> {
   await this.client.post(`/matches/${matchId}/games/${gameId}/swap-players`, swapData);
+}
+
+// Swap players at match level
+async swapMatchPlayers(
+  matchId: number, 
+  swapData: any
+): Promise<void> {
+  await this.client.post(`/matches/${matchId}/swap-players`, swapData);
 }
 
 // Get swap history for a match (optional)

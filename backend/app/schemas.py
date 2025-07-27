@@ -1,19 +1,24 @@
 ### backend/app/schemas.py
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
 from pydantic import BaseModel, field_validator
+
+TournamentFormat = Literal["round_robin", "group_knockout"]
+
 # -- Tournament Schemas --
 class TournamentBase(BaseModel):
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime]
     end_date: Optional[datetime]
+    format: TournamentFormat = "round_robin"
 
 class TournamentCreate(TournamentBase):
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime]
     end_date: Optional[datetime] = None
+    format: TournamentFormat = "round_robin"
     team_names: List[str]
     players_per_team: List[int]
 
@@ -22,12 +27,14 @@ class TournamentUpdate(BaseModel):
     description: Optional[str]
     start_date: Optional[datetime]
     end_date: Optional[datetime]
+    format: Optional[TournamentFormat]
 
 class TournamentResponse(TournamentBase):
     id: int
-    status: str
     current_round: int
     total_rounds: Optional[int]
+    format: TournamentFormat
+    stage: str  # not_yet_started, group, semi_final, final, completed
     class Config:
         from_attributes = True
 
@@ -96,12 +103,12 @@ class GameResponse(BaseModel):
         from_attributes = True
 
 class GameSimpleResultUpdate(BaseModel):
-    result: str  # 'white', 'black', or 'draw'
+    result: str  # 'white_win', 'black_win', 'draw', or 'pending'
 
     @field_validator("result")
     @classmethod
     def validate_result(cls, v):
-        allowed = {"white_win", "black_win", "draw"}
+        allowed = {"white_win", "black_win", "draw", "pending"}
         if v not in allowed:
             raise ValueError(f"result must be one of {allowed}")
         return v
@@ -163,3 +170,11 @@ class SwapPlayersRequest(BaseModel):
     new_white_player_id: Optional[int] = None
     new_black_player_id: Optional[int] = None
     reason: Optional[str] = None  # For audit trail
+
+class TeamSwapData(BaseModel):
+    player1_id: int
+    player2_id: int
+
+class MatchSwapRequest(BaseModel):
+    white_team_swaps: List[TeamSwapData] = []
+    black_team_swaps: List[TeamSwapData] = []

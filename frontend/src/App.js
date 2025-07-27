@@ -1,15 +1,17 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
-import Layout from './components/Layout';
-import Schedule from './components/Schedule';
-import Standings from './components/Standings';
-import Teams from './components/Teams';
-import BestPlayers from './components/BestPlayers';
-import LoginModal from './components/LoginModal';
-import { useAuth } from './hooks/useAuth';
-import { apiService as api } from './services/api';
+import Layout from '@/components/Layout';
+import TournamentHome from '@/components/TournamentHome';
+import Schedule from '@/components/Schedule';
+import Standings from '@/components/Standings';
+import Teams from '@/components/Teams';
+import BestPlayers from '@/components/BestPlayers';
+import TournamentManager from '@/components/TournamentManager';
+import LoginModal from '@/components/LoginModal';
+import { apiService as api } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
 const App = () => {
-    const [activeTab, setActiveTab] = useState('schedule');
+    const [activeTab, setActiveTab] = useState('home');
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [tournament, setTournament] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -37,6 +39,10 @@ const App = () => {
         try {
             const response = await api.getCurrentTournament();
             setTournament(response);
+            // Auto-switch to home tab after tournament creation/update
+            if (activeTab === 'tournaments') {
+                setActiveTab('home');
+            }
         }
         catch (err) {
             console.error('Error refreshing tournament:', err);
@@ -54,8 +60,6 @@ const App = () => {
     };
     const handleLogout = () => {
         logout();
-        if (adminMode)
-            toggleAdminMode(); // reset to viewer mode
     };
     const renderTabContent = () => {
         if (loading) {
@@ -65,14 +69,18 @@ const App = () => {
             return (_jsx("div", { className: "flex items-center justify-center h-64 text-red-600", children: _jsxs("div", { className: "text-center", children: [_jsx("div", { className: "text-6xl mb-4", children: "\u26A0\uFE0F" }), _jsx("div", { className: "text-xl font-semibold mb-2", children: "Something went wrong" }), _jsx("div", { className: "text-gray-600", children: error }), _jsx("button", { onClick: () => window.location.reload(), className: "mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700", children: "Retry" })] }) }));
         }
         switch (activeTab) {
+            case 'home':
+                return _jsx(TournamentHome, { tournament: tournament, isAdmin: isAuthenticated && adminMode, onUpdate: handleTournamentUpdate });
             case 'schedule':
                 return _jsx(Schedule, { isAdmin: isAuthenticated && adminMode, onUpdate: handleTournamentUpdate, tournament: tournament });
             case 'standings':
-                return _jsx(Standings, {});
+                return _jsx(Standings, { isAdmin: isAuthenticated && adminMode, onUpdate: handleTournamentUpdate });
             case 'teams':
                 return _jsx(Teams, { isAdmin: isAuthenticated && adminMode, tournament: tournament });
             case 'bestPlayers':
                 return _jsx(BestPlayers, {});
+            case 'tournaments':
+                return _jsx(TournamentManager, { isAdmin: isAuthenticated && adminMode, currentTournament: tournament, onTournamentChanged: handleTournamentUpdate });
             default:
                 return null;
         }

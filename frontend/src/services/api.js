@@ -1,9 +1,12 @@
 // frontend/src/services/api.ts
+/// <reference types="vite/client" />
 import axios from 'axios';
 class ApiService {
     client;
     constructor() {
-        this.client = axios.create({ baseURL: '/api' });
+        this.client = axios.create({
+            baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+        });
         // Attach interceptor once here
         this.client.interceptors.request.use(config => {
             const token = localStorage.getItem('token');
@@ -24,11 +27,44 @@ class ApiService {
         return res.data;
     }
     async getTournaments() {
-        const res = await this.client.get('/tournaments');
+        const res = await this.client.get('/tournaments/');
         return res.data;
     }
     async createTournament(data) {
-        const res = await this.client.post('/tournaments', data);
+        const res = await this.client.post('/tournaments/', data);
+        return res.data;
+    }
+    async setCurrentTournament(tournamentId) {
+        const res = await this.client.post(`/tournaments/${tournamentId}/set-current`);
+        return res.data;
+    }
+    async deleteTournament(tournamentId) {
+        await this.client.delete(`/tournaments/${tournamentId}`);
+    }
+    async startTournament(tournamentId) {
+        const res = await this.client.post(`/tournaments/${tournamentId}/start`);
+        return res.data;
+    }
+    // -- Tournament Stage Management --
+    async canCompleteTournament(tournamentId) {
+        const res = await this.client.get(`/tournaments/${tournamentId}/can-complete`);
+        return res.data;
+    }
+    async completeTournament(tournamentId) {
+        const res = await this.client.post(`/tournaments/${tournamentId}/complete`);
+        return res.data;
+    }
+    async getFinalRankings(tournamentId) {
+        const res = await this.client.get(`/tournaments/${tournamentId}/final-rankings`);
+        return res.data;
+    }
+    // -- Round Management --
+    async canCompleteRound(tournamentId, roundNumber) {
+        const res = await this.client.get(`/tournaments/${tournamentId}/rounds/${roundNumber}/can-complete`);
+        return res.data;
+    }
+    async completeRound(tournamentId, roundNumber) {
+        const res = await this.client.post(`/tournaments/${tournamentId}/rounds/${roundNumber}/complete`);
         return res.data;
     }
     async rescheduleRound(roundNumber, datetime) {
@@ -56,7 +92,7 @@ class ApiService {
     }
     // api.ts
     async addPlayer(player) {
-        const res = await this.client.post('/players/', player);
+        const res = await this.client.post('/players', player);
         return res.data;
     }
     async updatePlayer(playerId, player) {
@@ -67,8 +103,8 @@ class ApiService {
         await this.client.delete(`/players/${playerId}`);
     }
     // -- Matches --
-    async getMatches(roundId) {
-        const res = await this.client.get(`/matches/${roundId}`);
+    async getMatches(tournamentId, roundNumber) {
+        const res = await this.client.get(`/matches/${tournamentId}/${roundNumber}`);
         return res.data;
     }
     async submitBoardResult(matchId, boardNumber, resultPayload) {
@@ -78,6 +114,11 @@ class ApiService {
     async getStandings() {
         const tournament = await this.getCurrentTournament();
         const res = await this.client.get(`/tournaments/${tournament.id}/standings`);
+        return res.data;
+    }
+    async getGroupStandings() {
+        const tournament = await this.getCurrentTournament();
+        const res = await this.client.get(`/tournaments/${tournament.id}/group-standings`);
         return res.data;
     }
     async getBestPlayers() {
@@ -92,6 +133,10 @@ class ApiService {
     // Swap players in a specific game
     async swapGamePlayers(matchId, gameId, swapData) {
         await this.client.post(`/matches/${matchId}/games/${gameId}/swap-players`, swapData);
+    }
+    // Swap players at match level
+    async swapMatchPlayers(matchId, swapData) {
+        await this.client.post(`/matches/${matchId}/swap-players`, swapData);
     }
     // Get swap history for a match (optional)
     async getSwapHistory(matchId) {

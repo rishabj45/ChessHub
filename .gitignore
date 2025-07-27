@@ -15,7 +15,7 @@ backend/alembic/versions/*.pyc
 # === Python Test Artifacts ===
 .pytest_cache/
 .env
-
+future_features.txt
 # === Node / React Frontend ===
 frontend/node_modules/
 frontend/build/

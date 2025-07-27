@@ -47,7 +47,7 @@ const Layout: React.FC<LayoutProps> = ({
       </div>
 
       <nav className="bg-gray-200 p-2 flex space-x-4 rounded">
-        {['teams', 'schedule', 'standings', 'bestPlayers'].map((tab) => (
+        {['home', 'teams', 'schedule', 'standings', 'bestPlayers'].map((tab) => (
           <div
             key={tab}
             className={`cursor-pointer px-3 py-1 rounded ${
@@ -55,9 +55,21 @@ const Layout: React.FC<LayoutProps> = ({
             }`}
             onClick={() => onTabSelect(tab as TabType)}
           >
-            {tab}
+            {tab === 'home' ? 'Home' : 
+             tab === 'bestPlayers' ? 'Best Players' : 
+             tab.charAt(0).toUpperCase() + tab.slice(1)}
           </div>
         ))}
+        {isAdmin && (
+          <div
+            className={`cursor-pointer px-3 py-1 rounded ${
+              currentTab === 'tournaments' ? 'bg-primary-600 text-white' : 'hover:bg-gray-300'
+            }`}
+            onClick={() => onTabSelect('tournaments' as TabType)}
+          >
+            Tournaments
+          </div>
+        )}
       </nav>
 
       <main className="flex-1 container mx-auto p-4">{children}</main>
