@@ -92,7 +92,7 @@ class ApiService {
     }
     // api.ts
     async addPlayer(player) {
-        const res = await this.client.post('/players/', player);
+        const res = await this.client.post('/players', player);
         return res.data;
     }
     async updatePlayer(playerId, player) {

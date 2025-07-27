@@ -25,7 +25,7 @@ def get_player(player_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
     return player
 
-@router.post("/", response_model=PlayerResponse)
+@router.post("", response_model=PlayerResponse)
 def create_player(player: PlayerCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     """Create a new player (admin only)."""
     team = crud.get_team(db, player.team_id)
