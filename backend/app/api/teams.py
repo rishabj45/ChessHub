@@ -37,7 +37,7 @@ def update_team(team_id: int, team_upd: TeamUpdate, db: Session = Depends(get_db
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
     
     # Check if tournament has started
-    if team.tournament.stage != "not_yet_started":
+    if team.tournament.stage and team.tournament.stage != "not_yet_started":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot edit team after tournament has started")
     
     updated = crud.update_team(db, team_id, team_upd)

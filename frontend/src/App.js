@@ -11,12 +11,22 @@ import LoginModal from '@/components/LoginModal';
 import { apiService as api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 const App = () => {
-    const [activeTab, setActiveTab] = useState('home');
+    // Initialize activeTab from localStorage, fallback to 'home'
+    const [activeTab, setActiveTab] = useState(() => {
+        const savedTab = localStorage.getItem('chesshub-active-tab');
+        const validTabs = ['home', 'teams', 'schedule', 'standings', 'bestPlayers', 'tournaments'];
+        return (savedTab && validTabs.includes(savedTab)) ? savedTab : 'home';
+    });
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [tournament, setTournament] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { isAuthenticated, adminMode, toggleAdminMode, login, logout, } = useAuth();
+    // Function to handle tab changes with persistence
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        localStorage.setItem('chesshub-active-tab', tab);
+    };
     useEffect(() => {
         const fetchTournament = async () => {
             try {
@@ -41,7 +51,7 @@ const App = () => {
             setTournament(response);
             // Auto-switch to home tab after tournament creation/update
             if (activeTab === 'tournaments') {
-                setActiveTab('home');
+                handleTabChange('home');
             }
         }
         catch (err) {
@@ -85,6 +95,6 @@ const App = () => {
                 return null;
         }
     };
-    return (_jsxs(Layout, { currentTab: activeTab, onTabSelect: setActiveTab, tournament: tournament, isAdmin: isAuthenticated && adminMode, onAdminToggle: toggleAdminMode, isAuthenticated: isAuthenticated, onLoginClick: () => setShowLoginModal(true), onLogout: handleLogout, children: [renderTabContent(), showLoginModal && (_jsx(LoginModal, { isOpen: showLoginModal, onLogin: handleLogin, onClose: () => setShowLoginModal(false) }))] }));
+    return (_jsxs(Layout, { currentTab: activeTab, onTabSelect: handleTabChange, tournament: tournament, isAdmin: isAuthenticated && adminMode, onAdminToggle: toggleAdminMode, isAuthenticated: isAuthenticated, onLoginClick: () => setShowLoginModal(true), onLogout: handleLogout, children: [renderTabContent(), showLoginModal && (_jsx(LoginModal, { isOpen: showLoginModal, onLogin: handleLogin, onClose: () => setShowLoginModal(false) }))] }));
 };
 export default App;

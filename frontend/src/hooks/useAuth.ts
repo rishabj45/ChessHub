@@ -43,6 +43,10 @@ export function useAuth() {
       localStorage.setItem('token', response.token);
       const decoded = jwtDecode<JwtPayload>(response.token);
       setUser(decoded.sub);
+      
+      // Enable admin mode by default on login
+      setAdminMode(true);
+      localStorage.setItem('adminMode', 'true');
     } catch (error: any) {
       throw new Error(error.response?.data?.detail || 'Login failed');
     }

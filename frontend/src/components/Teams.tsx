@@ -36,6 +36,20 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
   const handleSave = async (team: Team) => {
     await apiService.updateTeam(team.id, team);
     setTeams(ts => ts.map(t => (t.id === team.id ? team : t)));
+    
+    // Reload players to reflect any changes made in TeamEditor
+    const updatedPlayers = await apiService.getPlayers();
+    setPlayers(updatedPlayers);
+    
+    setShowEditor(false);
+  };
+
+  const handleClose = async () => {
+    // Reload players to reflect any changes made in TeamEditor
+    // (since player operations are saved immediately)
+    const updatedPlayers = await apiService.getPlayers();
+    setPlayers(updatedPlayers);
+    
     setShowEditor(false);
   };
 
@@ -58,7 +72,7 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
                     <span className="font-semibold">{team.name}</span>
                   </div>
 
-                  {isAdmin && tournament?.stage === 'not_yet_started' && (
+                  {isAdmin && (!tournament || tournament.stage === 'not_yet_started') && (
                     <button
                       className="px-2 py-1 border rounded text-blue-500"
                       onClick={() => handleEdit(team)}
@@ -66,7 +80,7 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
                       Edit
                     </button>
                   )}
-                  {isAdmin && tournament?.stage !== 'not_yet_started' && (
+                  {isAdmin && tournament && tournament.stage !== 'not_yet_started' && (
                     <span className="px-2 py-1 text-gray-400 text-sm">
                       Editing Disabled
                     </span>
@@ -99,7 +113,7 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
         <TeamEditor
           team={selectedTeam}
           isOpen={showEditor}
-          onClose={() => setShowEditor(false)}
+          onClose={handleClose}
           onSave={handleSave}
           isAdmin={isAdmin}
           tournamentStage={tournament?.stage}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trophy, Calendar, Users, Play, Edit, Trash2, Crown, ArrowRight, CheckCircle } from 'lucide-react';
+import { Plus, Trophy, Calendar, Play, Trash2, Crown } from 'lucide-react';
 import TournamentCreator from './TournamentCreator';
 import { apiService } from '@/services/api';
 import { Tournament } from '@/types';
+import { getStageDescription, getStageDisplayText } from '@/utils/helpers';
 
 interface TournamentManagerProps {
   isAdmin: boolean;
@@ -23,22 +24,12 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
   const [deleting, setDeleting] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
   
-  // Stage progression states
-  const [stageProgression, setStageProgression] = useState<Record<number, any>>({});
-  const [advancing, setAdvancing] = useState<number | null>(null);
+  // State for completing tournaments
+  const [completing, setCompleting] = useState<number | null>(null);
 
   useEffect(() => {
     loadTournaments();
   }, []);
-
-  useEffect(() => {
-    // Load stage progression for group_knockout tournaments
-    tournaments.forEach(tournament => {
-      if (tournament.format === 'group_knockout' && tournament.stage !== 'completed') {
-        loadStageProgression(tournament.id);
-      }
-    });
-  }, [tournaments, isAdmin]);
 
   const loadTournaments = async () => {
     try {
@@ -109,27 +100,8 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
     await onTournamentChanged();
   };
 
-  // Stage progression functions
-  const loadStageProgression = async (tournamentId: number) => {
-    try {
-      const tournament = tournaments.find(t => t.id === tournamentId);
-      if (!tournament || tournament.format !== 'group_knockout') return;
-
-      let progression: any = {};
-
-      if (tournament.stage === 'final') {
-        const canComplete = await apiService.canCompleteTournament(tournamentId);
-        progression.canComplete = canComplete.can_complete;
-      }
-
-      setStageProgression(prev => ({ ...prev, [tournamentId]: progression }));
-    } catch (error) {
-      console.error('Failed to load stage progression:', error);
-    }
-  };
-
   const handleCompleteTournament = async (tournamentId: number) => {
-    setAdvancing(tournamentId);
+    setCompleting(tournamentId);
     try {
       await apiService.completeTournament(tournamentId);
       alert('✅ Tournament completed successfully!');
@@ -139,7 +111,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
       const errorMessage = error.response?.data?.detail || 'Failed to complete tournament';
       alert(`❌ Error: ${errorMessage}`);
     } finally {
-      setAdvancing(null);
+      setCompleting(null);
     }
   };
 
@@ -276,7 +248,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                     <p className="text-gray-600 mb-3">{tournament.description}</p>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="flex items-center text-gray-600">
                       <Calendar className="w-4 h-4 mr-2" />
                       <div>
@@ -294,84 +266,15 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                     </div>
 
                     <div className="flex items-center text-gray-600">
-                      <Users className="w-4 h-4 mr-2" />
-                      <div>
-                        <div className="font-medium">Progress</div>
-                        <div>
-                          {tournament.stage === 'completed' 
-                            ? `All ${tournament.total_rounds} rounds completed`
-                            : `Round ${tournament.current_round} of ${tournament.total_rounds}`
-                          }
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center text-gray-600">
                       <Trophy className="w-4 h-4 mr-2" />
                       <div>
                         <div className="font-medium">Stage</div>
-                        <div className="capitalize">
-                          {tournament.stage === 'not_yet_started' 
-                            ? 'Yet to start' 
-                            : tournament.stage === 'completed'
-                              ? 'Completed'
-                              : tournament.stage || 'group'
-                          }
+                        <div className="text-sm">
+                          {getStageDisplayText(tournament)}
                         </div>
                       </div>
                     </div>
                   </div>
-
-                  {/* Stage Progression Controls for Group+Knockout tournaments */}
-                  {tournament.format === 'group_knockout' && isAdmin && tournament.stage !== 'completed' && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Tournament Progression</h4>
-                      <div className="flex items-center space-x-4">
-                        {/* Group Stage */}
-                        <div className={`flex items-center space-x-2 ${tournament.stage === 'group' ? 'text-blue-600' : tournament.stage === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-                          <div className={`w-3 h-3 rounded-full ${tournament.stage === 'group' ? 'bg-blue-600' : (tournament.stage !== 'group' && tournament.stage !== 'completed') ? 'bg-green-600' : 'bg-gray-300'}`}></div>
-                          <span className="text-sm font-medium">Group Stage</span>
-                        </div>
-                        
-                        <ArrowRight className="w-4 h-4 text-gray-400" />
-                        
-                        {/* Semifinal Stage */}
-                        <div className={`flex items-center space-x-2 ${tournament.stage === 'semifinal' ? 'text-blue-600' : (tournament.stage === 'final' || tournament.stage === 'completed') ? 'text-green-600' : 'text-gray-400'}`}>
-                          <div className={`w-3 h-3 rounded-full ${tournament.stage === 'semifinal' ? 'bg-blue-600' : (tournament.stage === 'final' || tournament.stage === 'completed') ? 'bg-green-600' : 'bg-gray-300'}`}></div>
-                          <span className="text-sm font-medium">Semifinal</span>
-                        </div>
-                        
-                        <ArrowRight className="w-4 h-4 text-gray-400" />
-                        
-                        {/* Final Stage */}
-                        <div className={`flex items-center space-x-2 ${tournament.stage === 'final' ? 'text-blue-600' : tournament.stage === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-                          <div className={`w-3 h-3 rounded-full ${tournament.stage === 'final' ? 'bg-blue-600' : tournament.stage === 'completed' ? 'bg-green-600' : 'bg-gray-300'}`}></div>
-                          <span className="text-sm font-medium">Final</span>
-                        </div>
-                        
-                        <ArrowRight className="w-4 h-4 text-gray-400" />
-                        
-                        {/* Completed */}
-                        <div className={`flex items-center space-x-2 ${tournament.stage === 'completed' ? 'text-green-600' : 'text-gray-400'}`}>
-                          <CheckCircle className={`w-4 h-4 ${tournament.stage === 'completed' ? 'text-green-600' : 'text-gray-400'}`} />
-                          <span className="text-sm font-medium">Completed</span>
-                        </div>
-                      </div>
-
-                      {/* Stage Action Buttons */}
-                      <div className="mt-3 flex space-x-2">
-                        {tournament.stage === 'final' && stageProgression[tournament.id]?.canComplete && (
-                          <button
-                            onClick={() => handleCompleteTournament(tournament.id)}
-                            disabled={advancing === tournament.id}
-                            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-                          >
-                            {advancing === tournament.id ? 'Completing...' : 'Complete Tournament'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {isAdmin && (

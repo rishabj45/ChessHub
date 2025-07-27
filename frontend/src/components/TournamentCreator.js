@@ -141,8 +141,17 @@ const TournamentCreator = ({ isAdmin, onTournamentCreated }) => {
                 players_per_team: formData.teams.map(t => t.playerCount),
                 format: formData.format,
             };
-            await apiService.createTournament(tournamentData);
-            setSuccess('Tournament created successfully!');
+            // Create the tournament
+            const createdTournament = await apiService.createTournament(tournamentData);
+            try {
+                // Automatically set the newly created tournament as current
+                await apiService.setCurrentTournament(createdTournament.id);
+                setSuccess('Tournament created successfully and set as current!');
+            }
+            catch (setCurrentError) {
+                console.warn('Failed to set tournament as current:', setCurrentError);
+                setSuccess('Tournament created successfully! However, failed to set as current - you can set it manually from the tournament list.');
+            }
             onTournamentCreated();
             // Reset form
             setFormData({

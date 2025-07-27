@@ -9,6 +9,7 @@ class Tournament(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
+    venue = Column(String(255))
     start_date = Column(DateTime, default=func.now())
     end_date = Column(DateTime)
     current_round = Column(Integer, default=0)  # 0 when not started, 1+ when started

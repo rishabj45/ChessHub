@@ -9,12 +9,99 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
     const [teams, setTeams] = useState([]);
     const [selectedMatch, setSelectedMatch] = useState(null);
     const [selectedMatchForSwap, setSelectedMatchForSwap] = useState(null);
-    const [expandedMatches, setExpandedMatches] = useState({});
+    // Initialize expandedMatches from localStorage
+    const [expandedMatches, setExpandedMatches] = useState(() => {
+        try {
+            const saved = localStorage.getItem('chesshub-expanded-matches');
+            return saved ? JSON.parse(saved) : {};
+        }
+        catch {
+            return {};
+        }
+    });
     const [roundTimes, setRoundTimes] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [roundCompletionStatus, setRoundCompletionStatus] = useState({});
     const [completingRound, setCompletingRound] = useState(null);
+    const [hasInitiallyScrolled, setHasInitiallyScrolled] = useState(false);
+    // Professional scroll restoration approach with multiple fallback strategies
+    const preserveScrollPosition = (callback) => {
+        const scrollY = window.pageYOffset;
+        const scrollX = window.pageXOffset;
+        // Find the currently visible round for context preservation
+        const visibleRound = Object.keys(groupedByRound).find(roundStr => {
+            const element = document.getElementById(`round-${roundStr}`);
+            if (element) {
+                const rect = element.getBoundingClientRect();
+                return rect.top <= 100 && rect.bottom >= 0;
+            }
+            return false;
+        });
+        // Disable smooth scrolling temporarily
+        const originalScrollBehavior = document.documentElement.style.scrollBehavior;
+        document.documentElement.style.scrollBehavior = 'auto';
+        callback();
+        // Multi-layered restoration strategy
+        const restoreScroll = () => {
+            // Try exact position first
+            window.scrollTo(scrollX, scrollY);
+            // Fallback: if position seems off, try to maintain round context
+            setTimeout(() => {
+                if (Math.abs(window.pageYOffset - scrollY) > 50 && visibleRound) {
+                    const element = document.getElementById(`round-${visibleRound}`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        // Fine-tune position
+                        setTimeout(() => {
+                            window.scrollTo(scrollX, Math.max(0, scrollY));
+                        }, 10);
+                    }
+                }
+            }, 50);
+        };
+        // Multiple restoration attempts with different timings
+        requestAnimationFrame(() => {
+            restoreScroll();
+            setTimeout(() => {
+                restoreScroll();
+                setTimeout(() => {
+                    restoreScroll();
+                    // Restore original scroll behavior
+                    document.documentElement.style.scrollBehavior = originalScrollBehavior;
+                }, 100);
+            }, 10);
+        });
+    };
+    // Function to refresh only match data without full tournament refresh
+    const refreshMatchData = async () => {
+        if (!tournament)
+            return;
+        try {
+            const allMatches = [];
+            for (let round = 1; round <= tournament.total_rounds; round++) {
+                const res = await apiService.getMatches(tournament.id, round);
+                allMatches.push(...res);
+            }
+            setMatches(allMatches);
+        }
+        catch (err) {
+            console.error('Failed to refresh match data:', err);
+        }
+    };
+    // Function to update expandedMatches with persistence
+    const updateExpandedMatches = (updater) => {
+        setExpandedMatches((prev) => {
+            const newState = updater(prev);
+            try {
+                localStorage.setItem('chesshub-expanded-matches', JSON.stringify(newState));
+            }
+            catch (error) {
+                console.warn('Failed to save expanded matches to localStorage:', error);
+            }
+            return newState;
+        });
+    };
     const getRoundType = (roundNumber) => {
         if (!tournament || tournament.format !== 'group_knockout') {
             return 'group'; // Default for round-robin
@@ -38,14 +125,21 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
             const totalRounds = tournament?.total_rounds || 0;
             const semiRound = totalRounds - 1;
             const finalRound = totalRounds;
+            // For group+knockout format, hide round numbers when in semifinal or final stages
+            const isGroupKnockoutFormat = tournament?.format === 'group_knockout';
+            const isKnockoutStage = tournament?.stage === 'semifinal' ||
+                tournament?.stage === 'semi_final' ||
+                tournament?.stage === 'final';
+            const hideRoundNumber = isGroupKnockoutFormat && isKnockoutStage && roundType === 'knockout';
+            // Determine title based on the specific round number, not just tournament stage
             if (roundNumber === semiRound) {
-                return `Round ${roundNumber} (Semi-finals)`;
+                return hideRoundNumber ? 'Semifinals' : `Round ${roundNumber} (Semi-finals)`;
             }
             else if (roundNumber === finalRound) {
-                return `Round ${roundNumber} (Final & 3rd Place)`;
+                return hideRoundNumber ? 'Final & 3rd Place' : `Round ${roundNumber} (Final & 3rd Place)`;
             }
             else {
-                return `Round ${roundNumber} (Knockout)`;
+                return hideRoundNumber ? 'Knockout' : `Round ${roundNumber} (Knockout)`;
             }
         }
     };
@@ -90,8 +184,49 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                 setLoading(false);
             }
         };
+        // Reset scroll flag when tournament changes (new tournament or refresh)
+        setHasInitiallyScrolled(false);
         loadData();
-    }, [tournament, onUpdate, isAdmin]);
+    }, [tournament?.id, isAdmin]); // Changed dependency to tournament.id instead of tournament object
+    // Auto-scroll to current round ONLY on initial load and refresh
+    useEffect(() => {
+        if (!loading && tournament && matches.length > 0 && !hasInitiallyScrolled) {
+            const currentRound = tournament.current_round;
+            if (currentRound > 0) {
+                // Clear all expanded matches first, then auto-expand current round matches
+                updateExpandedMatches(() => {
+                    const newExpanded = {};
+                    const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
+                    currentRoundMatches.forEach(match => {
+                        newExpanded[match.id] = true;
+                    });
+                    return newExpanded;
+                });
+                // Small delay to ensure DOM is fully rendered
+                setTimeout(() => {
+                    const currentRoundElement = document.getElementById(`round-${currentRound}`);
+                    if (currentRoundElement) {
+                        currentRoundElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                    setHasInitiallyScrolled(true);
+                }, 300);
+            }
+            else {
+                // No current round, just clear expanded matches
+                updateExpandedMatches(() => ({}));
+                setHasInitiallyScrolled(true);
+            }
+        }
+    }, [loading, tournament?.current_round, matches.length, hasInitiallyScrolled, updateExpandedMatches]);
+    // Reset scroll flag on unmount
+    useEffect(() => {
+        return () => {
+            setHasInitiallyScrolled(false);
+        };
+    }, []);
     const getPlayer = (id) => players.find((p) => p.id === id);
     const getTeamName = (id) => {
         // Handle placeholder teams for knockout stage
@@ -106,20 +241,8 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         return teams.find((t) => t.id === id)?.name || `Team ${id}`;
     };
     const getGroupLabel = (teamId, roundNumber) => {
-        if (!tournament || tournament.format !== 'group_knockout' || teamId < 0) {
-            return '';
-        }
-        const roundType = getRoundType(roundNumber);
-        if (roundType !== 'group') {
-            return '';
-        }
-        // Determine group based on team position
-        const teamIndex = teams.findIndex(t => t.id === teamId);
-        if (teamIndex === -1)
-            return '';
-        const teamsPerGroup = teams.length / 2;
-        const isGroupA = teamIndex < teamsPerGroup;
-        return isGroupA ? ' (Group A)' : ' (Group B)';
+        // Remove group A/B labels in brackets for group+knockout format matches
+        return '';
     };
     const groupedByRound = matches.reduce((acc, match) => {
         acc[match.round_number] = acc[match.round_number] || [];
@@ -135,8 +258,10 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         return `${score[0]}–${score[1]}`;
     };
     const handleSwapComplete = () => {
-        // Refresh the data after a successful swap
-        onUpdate();
+        // Use professional scroll preservation for swap completion
+        preserveScrollPosition(() => {
+            refreshMatchData();
+        });
     };
     const checkRoundCompletionStatus = async (roundNumber) => {
         if (!tournament)
@@ -156,7 +281,10 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         try {
             const result = await apiService.completeRound(tournament.id, roundNumber);
             alert(`✅ Round ${roundNumber} completed successfully!\n\n${result.round_info.message || ''}`);
-            onUpdate(); // Refresh the tournament data
+            // Use professional scroll preservation for round completion
+            preserveScrollPosition(() => {
+                onUpdate();
+            });
         }
         catch (error) {
             const errorMessage = error.response?.data?.detail || 'Failed to complete round';
@@ -175,15 +303,33 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         return _jsx("div", { children: "Loading schedule..." });
     if (error)
         return _jsx("div", { className: "text-red-500", children: error });
-    return (_jsxs("div", { children: [_jsx("h2", { className: "text-2xl mb-4", children: "Schedule" }), Object.entries(groupedByRound).map(([roundStr, roundMatches]) => {
+    return (_jsxs("div", { style: { scrollBehavior: 'auto' }, children: [_jsx("h2", { className: "text-2xl mb-4", children: "Schedule" }), Object.entries(groupedByRound).map(([roundStr, roundMatches]) => {
                 const round = Number(roundStr);
                 const roundTime = roundTimes[round];
-                return (_jsxs("div", { className: "mb-6 border rounded shadow bg-gray-50", children: [_jsxs("div", { className: "flex justify-between items-center bg-gray-200 px-4 py-2", children: [_jsx("h3", { className: "text-lg font-semibold", children: getRoundTitle(round) }), _jsx("div", { className: "flex items-center gap-4", children: isAdmin ? (_jsxs(_Fragment, { children: [_jsx("input", { type: "datetime-local", value: roundTime || '', onChange: async (e) => {
+                const isCurrentRound = tournament?.current_round === round;
+                const isPastRound = tournament && round < tournament.current_round;
+                const isFutureRound = tournament && round > tournament.current_round;
+                let roundClass = "mb-6 border rounded shadow ";
+                if (isCurrentRound) {
+                    roundClass += "border-2 border-blue-500 bg-blue-50 shadow-lg";
+                }
+                else if (isPastRound) {
+                    roundClass += "bg-gray-100 border-gray-300";
+                }
+                else {
+                    roundClass += "bg-gray-50 border-gray-200";
+                }
+                return (_jsxs("div", { className: roundClass, style: { scrollMarginTop: '20px' }, children: [_jsxs("div", { className: `flex justify-between items-center px-4 py-2 ${isCurrentRound ? 'bg-blue-200' :
+                                isPastRound ? 'bg-gray-300' : 'bg-gray-200'}`, id: `round-${round}`, children: [_jsxs("h3", { className: `text-lg font-semibold ${isCurrentRound ? 'text-blue-800' :
+                                        isPastRound ? 'text-gray-600' : 'text-gray-800'}`, children: [getRoundTitle(round), isCurrentRound && _jsx("span", { className: "ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded", children: "Current" }), isPastRound && _jsx("span", { className: "ml-2 text-xs text-gray-500", children: "(Completed)" })] }), _jsx("div", { className: "flex items-center gap-4", children: isAdmin ? (_jsxs(_Fragment, { children: [_jsx("input", { type: "datetime-local", value: roundTime || '', onChange: async (e) => {
                                                     const newTime = e.target.value;
                                                     setRoundTimes((prev) => ({ ...prev, [round]: newTime }));
                                                     try {
                                                         await apiService.rescheduleRound(round, newTime);
-                                                        onUpdate();
+                                                        // Use professional scroll preservation for rescheduling
+                                                        preserveScrollPosition(() => {
+                                                            onUpdate();
+                                                        });
                                                     }
                                                     catch {
                                                         alert('Failed to update round schedule');
@@ -191,7 +337,8 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                 }, className: "border rounded px-2 py-1 text-sm" }), (() => {
                                                 const status = roundCompletionStatus[round];
                                                 const isCurrentRound = tournament?.current_round === round;
-                                                const isCompleted = round < (tournament?.current_round || 0);
+                                                const isCompleted = round < (tournament?.current_round || 0) ||
+                                                    (status && status.reason === "Round is already completed");
                                                 if (isCompleted) {
                                                     return (_jsx("span", { className: "text-sm px-3 py-1 bg-green-500 text-white rounded", children: "\u2705 Completed" }));
                                                 }
@@ -209,7 +356,7 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                 return null;
                                             })()] })) : (_jsx("span", { className: "text-sm text-gray-700", children: roundTime ? new Date(roundTime).toLocaleString() : 'TBD' })) })] }), roundMatches.map((match) => {
                             const expanded = expandedMatches[match.id] ?? false;
-                            return (_jsxs("div", { className: "bg-white p-4 border-b", children: [_jsxs("div", { className: "flex justify-between items-center mb-2 cursor-pointer", onClick: () => setExpandedMatches((prev) => ({
+                            return (_jsxs("div", { className: "bg-white p-4 border-b", children: [_jsxs("div", { className: "flex justify-between items-center mb-2 cursor-pointer", onClick: () => updateExpandedMatches((prev) => ({
                                             ...prev,
                                             [match.id]: !prev[match.id],
                                         })), children: [_jsxs("p", { className: "text-lg font-semibold", children: [getTeamName(match.white_team_id), getGroupLabel(match.white_team_id, round), " vs ", getTeamName(match.black_team_id), getGroupLabel(match.black_team_id, round), " (", match.white_score ?? 0, "\u2013", match.black_score ?? 0, ")"] }), _jsx("span", { className: "text-sm text-blue-600", children: expanded ? 'Hide Boards ▲' : 'Show Boards ▼' })] }), expanded && (_jsxs("div", { className: "text-sm grid gap-2", children: [match.games.map((game) => {
@@ -229,7 +376,10 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                         })] }, round));
             }), selectedMatch && (_jsx(MatchResult, { match: selectedMatch, players: players, onClose: () => {
                     setSelectedMatch(null);
-                    onUpdate();
+                    // Use professional scroll preservation technique
+                    preserveScrollPosition(() => {
+                        refreshMatchData();
+                    });
                 } })), selectedMatchForSwap && (_jsx(MatchSwapModal, { match: selectedMatchForSwap, isOpen: !!selectedMatchForSwap, onClose: () => setSelectedMatchForSwap(null), onSwapComplete: handleSwapComplete, players: players, teams: teams }))] }));
 };
 export default Schedule;

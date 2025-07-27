@@ -11,7 +11,7 @@ const TeamEditor = ({ team, isOpen, onClose, onSave, isAdmin, tournamentStage })
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     // Check if editing is disabled (tournament has started)
-    const isEditingDisabled = tournamentStage !== 'not_yet_started';
+    const isEditingDisabled = tournamentStage && tournamentStage !== 'not_yet_started';
     // Load team players when component opens
     useEffect(() => {
         if (isOpen && team.id) {

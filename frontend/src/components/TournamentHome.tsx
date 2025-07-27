@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { Tournament } from '@/types';
 import { Trophy, Calendar, MapPin, Info, Users, Target, Crown } from 'lucide-react';
+import { getProgressDisplay, getStageDisplayText } from '@/utils/helpers';
 
 interface TournamentHomeProps {
   tournament?: Tournament | null;
@@ -188,12 +189,7 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
             <div>
               <div className="font-semibold">Stage</div>
               <div className="capitalize">
-                {tournament.stage === 'not_yet_started' 
-                  ? 'Yet to start' 
-                  : tournament.stage === 'completed'
-                    ? 'Completed'
-                    : `${tournament.stage.replace(/_/g, ' ')} - Round ${tournament.current_round}/${tournament.total_rounds}`
-                }
+                {getStageDisplayText(tournament)}
               </div>
             </div>
           </div>
@@ -262,14 +258,7 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
             <div>
               <h3 className="font-semibold text-gray-700 mb-2">Current Stage</h3>
               <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                <strong>
-                  {tournament.stage === 'not_yet_started' 
-                    ? 'Yet to start' 
-                    : tournament.stage === 'completed'
-                      ? 'Completed'
-                      : tournament.stage.charAt(0).toUpperCase() + tournament.stage.slice(1)
-                  }:
-                </strong> {getStageDescription(tournament.stage, tournament.format)}
+                {getStageDisplayText(tournament)}
               </p>
             </div>
             

@@ -49,12 +49,11 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
             <th className="p-2">Match Pts</th>
             <th className="p-2">Game Pts</th>
             <th className="p-2">SB</th>
-            <th className="p-2">Status</th>
           </tr>
         </thead>
         <tbody>
           {teams.map((team, idx) => (
-            <tr key={team.id} className={idx < 2 ? 'bg-green-50' : ''}>
+            <tr key={team.id} className={idx < 2 ? 'bg-green-100 border-l-4 border-green-500' : ''}>
               <td className="p-2 font-semibold">{idx + 1}</td>
               <td className="p-2">{team.name}</td>
               <td className="p-2">{team.matches_played}</td>
@@ -64,11 +63,6 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
               <td className="p-2 font-semibold">{team.match_points}</td>
               <td className="p-2">{team.game_points}</td>
               <td className="p-2">{team.sonneborn_berger?.toFixed(2)}</td>
-              <td className="p-2">
-                {idx === 0 && <span className="text-green-600 font-semibold">1st - Qualified</span>}
-                {idx === 1 && <span className="text-green-600 font-semibold">2nd - Qualified</span>}
-                {idx > 1 && <span className="text-gray-500">Eliminated</span>}
-              </td>
             </tr>
           ))}
         </tbody>

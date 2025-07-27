@@ -33,7 +33,7 @@ def create_player(player: PlayerCreate, db: Session = Depends(get_db), _: dict =
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
     if team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add player to completed tournament")
-    if team.tournament.stage != "not_yet_started":
+    if team.tournament.stage and team.tournament.stage != "not_yet_started":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add player after tournament has started")
     if crud.get_player_by_name_in_team(db, player.name, player.team_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Player name already exists in this team")
@@ -49,7 +49,7 @@ def update_player(player_id: int, upd: PlayerUpdate, db: Session = Depends(get_d
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
     if p.team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot update player in completed tournament")
-    if p.team.tournament.stage != "not_yet_started":
+    if p.team.tournament.stage and p.team.tournament.stage != "not_yet_started":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot update player after tournament has started")
     if upd.name and upd.name != p.name:
         if crud.get_player_by_name_in_team(db, upd.name, p.team_id):
@@ -68,7 +68,7 @@ def delete_player(player_id: int, db: Session = Depends(get_db), _: dict = Depen
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
     if p.team.tournament.stage == "completed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete player from completed tournament")
-    if p.team.tournament.stage != "not_yet_started":
+    if p.team.tournament.stage and p.team.tournament.stage != "not_yet_started":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete player after tournament has started")
     if len(p.team.players) <= 4:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Team must have at least 4 players")

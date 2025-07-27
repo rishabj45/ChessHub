@@ -145,7 +145,20 @@ def can_complete_round(db: Session, tournament_id: int, round_number: int) -> di
         return {"can_complete": False, "reason": "Round not found"}
     
     if round_obj.is_completed:
-        return {"can_complete": False, "reason": "Round is already completed"}
+        # Get round matches and their status for display purposes
+        round_matches = db.query(Match).filter(Match.round_id == round_obj.id).all()
+        completed_matches = [m for m in round_matches if m.is_completed]
+        total_matches = len(round_matches)
+        completed_count = len(completed_matches)
+        
+        return {
+            "can_complete": False, 
+            "reason": "Round is already completed",
+            "round_number": round_number,
+            "total_matches": total_matches,
+            "completed_matches": completed_count,
+            "completion_percentage": 100.0
+        }
     
     # Check if this round is the current round or a future round
     if round_number > tournament.current_round:
@@ -233,6 +246,7 @@ def create_tournament_structure(db: Session,data: schemas.TournamentCreate):
     tour = Tournament(
         name=data.name,
         description=data.description,
+        venue=data.venue,
         start_date=data.start_date or datetime.utcnow(),
         end_date=data.end_date,
         format=data.format,

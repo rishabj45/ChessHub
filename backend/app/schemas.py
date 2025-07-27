@@ -9,6 +9,7 @@ TournamentFormat = Literal["round_robin", "group_knockout"]
 class TournamentBase(BaseModel):
     name: str
     description: Optional[str] = None
+    venue: Optional[str] = None
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     format: TournamentFormat = "round_robin"
@@ -16,6 +17,7 @@ class TournamentBase(BaseModel):
 class TournamentCreate(TournamentBase):
     name: str
     description: Optional[str] = None
+    venue: Optional[str] = None
     start_date: Optional[datetime]
     end_date: Optional[datetime] = None
     format: TournamentFormat = "round_robin"
@@ -25,6 +27,7 @@ class TournamentCreate(TournamentBase):
 class TournamentUpdate(BaseModel):
     name: Optional[str]
     description: Optional[str]
+    venue: Optional[str]
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     format: Optional[TournamentFormat]

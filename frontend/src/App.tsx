@@ -12,7 +12,12 @@ import { apiService as api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  // Initialize activeTab from localStorage, fallback to 'home'
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const savedTab = localStorage.getItem('chesshub-active-tab');
+    const validTabs: TabType[] = ['home', 'teams', 'schedule', 'standings', 'bestPlayers', 'tournaments'];
+    return (savedTab && validTabs.includes(savedTab as TabType)) ? (savedTab as TabType) : 'home';
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +30,12 @@ const App: React.FC = () => {
     login,
     logout,
   } = useAuth();
+
+  // Function to handle tab changes with persistence
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    localStorage.setItem('chesshub-active-tab', tab);
+  };
 
   useEffect(() => {
     const fetchTournament = async () => {
@@ -50,7 +61,7 @@ const App: React.FC = () => {
       setTournament(response);
       // Auto-switch to home tab after tournament creation/update
       if (activeTab === 'tournaments') {
-        setActiveTab('home');
+        handleTabChange('home');
       }
     } catch (err) {
       console.error('Error refreshing tournament:', err);
@@ -118,7 +129,7 @@ const App: React.FC = () => {
   return (
     <Layout
       currentTab={activeTab}
-      onTabSelect={setActiveTab}
+      onTabSelect={handleTabChange}
       tournament={tournament}
       isAdmin={isAuthenticated && adminMode}
       onAdminToggle={toggleAdminMode}
