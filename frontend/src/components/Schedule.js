@@ -51,11 +51,11 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                 if (Math.abs(window.pageYOffset - scrollY) > 50 && visibleRound) {
                     const element = document.getElementById(`round-${visibleRound}`);
                     if (element) {
-                        element.scrollIntoView({ behavior: 'auto', block: 'start' });
-                        // Fine-tune position
-                        setTimeout(() => {
-                            window.scrollTo(scrollX, Math.max(0, scrollY));
-                        }, 10);
+                        // Calculate target position with header offset directly
+                        const elementTop = element.offsetTop;
+                        const headerOffset = 80;
+                        const targetPosition = Math.max(0, elementTop - headerOffset);
+                        window.scrollTo({ top: targetPosition, behavior: 'auto' });
                     }
                 }
             }, 50);
@@ -84,6 +84,11 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                 allMatches.push(...res);
             }
             setMatches(allMatches);
+            // Also refresh round completion status for current round
+            const currentRound = tournament.current_round;
+            if (currentRound > 0 && isAdmin) {
+                await checkRoundCompletionStatus(currentRound);
+            }
         }
         catch (err) {
             console.error('Failed to refresh match data:', err);
@@ -133,10 +138,10 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
             const hideRoundNumber = isGroupKnockoutFormat && isKnockoutStage && roundType === 'knockout';
             // Determine title based on the specific round number, not just tournament stage
             if (roundNumber === semiRound) {
-                return hideRoundNumber ? 'Semifinals' : `Round ${roundNumber} (Semi-finals)`;
+                return 'Semi Finals';
             }
             else if (roundNumber === finalRound) {
-                return hideRoundNumber ? 'Final & 3rd Place' : `Round ${roundNumber} (Final & 3rd Place)`;
+                return 'Final & 3rd Place';
             }
             else {
                 return hideRoundNumber ? 'Knockout' : `Round ${roundNumber} (Knockout)`;
@@ -206,9 +211,14 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                 setTimeout(() => {
                     const currentRoundElement = document.getElementById(`round-${currentRound}`);
                     if (currentRoundElement) {
-                        currentRoundElement.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
+                        // Calculate the target position accounting for sticky header
+                        const elementTop = currentRoundElement.offsetTop;
+                        const headerOffset = 80; // Height of sticky header + tabs
+                        const targetPosition = Math.max(0, elementTop - headerOffset);
+                        // Scroll directly to the calculated position
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
                         });
                     }
                     setHasInitiallyScrolled(true);
@@ -280,11 +290,48 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         setCompletingRound(roundNumber);
         try {
             const result = await apiService.completeRound(tournament.id, roundNumber);
-            alert(`✅ Round ${roundNumber} completed successfully!\n\n${result.round_info.message || ''}`);
-            // Use professional scroll preservation for round completion
-            preserveScrollPosition(() => {
-                onUpdate();
-            });
+            // Immediately hide the Complete Round button by updating the status
+            setRoundCompletionStatus(prev => ({
+                ...prev,
+                [roundNumber]: { ...prev[roundNumber], can_complete: false }
+            }));
+            // Update tournament data and handle new current round
+            await onUpdate();
+            // Force refresh match data to ensure placeholder replacements are visible
+            // This is especially important after completing final group round or semi-finals
+            await refreshMatchData();
+            // Refresh round completion status for all rounds since advancing stages may affect future rounds
+            if (isAdmin && tournament) {
+                for (let round = 1; round <= tournament.total_rounds; round++) {
+                    await checkRoundCompletionStatus(round);
+                }
+            }
+            // If there's a next round, expand its matches and scroll to it
+            const nextRound = roundNumber + 1;
+            const nextRoundMatches = matches.filter(m => m.round_number === nextRound);
+            if (nextRoundMatches.length > 0) {
+                // Expand all matches in the new current round
+                updateExpandedMatches((prev) => {
+                    const newExpanded = { ...prev };
+                    nextRoundMatches.forEach(match => {
+                        newExpanded[match.id] = true;
+                    });
+                    return newExpanded;
+                });
+                // Scroll to the new current round after a brief delay to allow for data refresh
+                setTimeout(() => {
+                    const nextRoundElement = document.getElementById(`round-${nextRound}`);
+                    if (nextRoundElement) {
+                        const elementTop = nextRoundElement.offsetTop;
+                        const headerOffset = 80;
+                        const targetPosition = Math.max(0, elementTop - headerOffset);
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 200); // Increased delay to allow for data refresh
+            }
         }
         catch (error) {
             const errorMessage = error.response?.data?.detail || 'Failed to complete round';
@@ -321,7 +368,7 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                 }
                 return (_jsxs("div", { className: roundClass, style: { scrollMarginTop: '20px' }, children: [_jsxs("div", { className: `flex justify-between items-center px-4 py-2 ${isCurrentRound ? 'bg-blue-200' :
                                 isPastRound ? 'bg-gray-300' : 'bg-gray-200'}`, id: `round-${round}`, children: [_jsxs("h3", { className: `text-lg font-semibold ${isCurrentRound ? 'text-blue-800' :
-                                        isPastRound ? 'text-gray-600' : 'text-gray-800'}`, children: [getRoundTitle(round), isCurrentRound && _jsx("span", { className: "ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded", children: "Current" }), isPastRound && _jsx("span", { className: "ml-2 text-xs text-gray-500", children: "(Completed)" })] }), _jsx("div", { className: "flex items-center gap-4", children: isAdmin ? (_jsxs(_Fragment, { children: [_jsx("input", { type: "datetime-local", value: roundTime || '', onChange: async (e) => {
+                                        isPastRound ? 'text-gray-600' : 'text-gray-800'}`, children: [getRoundTitle(round), isCurrentRound && _jsx("span", { className: "ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded", children: "Current" })] }), _jsx("div", { className: "flex items-center gap-4", children: isAdmin ? (_jsxs(_Fragment, { children: [_jsx("input", { type: "datetime-local", value: roundTime || '', onChange: async (e) => {
                                                     const newTime = e.target.value;
                                                     setRoundTimes((prev) => ({ ...prev, [round]: newTime }));
                                                     try {
@@ -337,21 +384,9 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                 }, className: "border rounded px-2 py-1 text-sm" }), (() => {
                                                 const status = roundCompletionStatus[round];
                                                 const isCurrentRound = tournament?.current_round === round;
-                                                const isCompleted = round < (tournament?.current_round || 0) ||
-                                                    (status && status.reason === "Round is already completed");
-                                                if (isCompleted) {
-                                                    return (_jsx("span", { className: "text-sm px-3 py-1 bg-green-500 text-white rounded", children: "\u2705 Completed" }));
-                                                }
-                                                if (!isCurrentRound) {
-                                                    return null; // Don't show button for future rounds
-                                                }
-                                                if (status?.can_complete) {
-                                                    return (_jsx("button", { onClick: () => handleCompleteRound(round), disabled: completingRound === round, className: "text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50", title: status.message || `Complete round ${round} - All ${status.total_matches} matches finished`, children: completingRound === round ? 'Completing...' : 'Complete Round' }));
-                                                }
-                                                else if (status) {
-                                                    const missingCount = status.missing_matches || 0;
-                                                    const tooltipText = status.reason || `${missingCount} matches still need results`;
-                                                    return (_jsxs("span", { className: "text-sm px-3 py-1 bg-gray-400 text-white rounded cursor-help", title: tooltipText, children: [status.completed_matches || 0, "/", status.total_matches || 0, " Finished"] }));
+                                                // Only show the Complete Round button if it's the current round and can be completed
+                                                if (isCurrentRound && status?.can_complete) {
+                                                    return (_jsx("button", { onClick: () => handleCompleteRound(round), disabled: completingRound === round, className: "text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50", title: status.message || `Complete round ${round}`, children: completingRound === round ? 'Completing...' : 'Complete Round' }));
                                                 }
                                                 return null;
                                             })()] })) : (_jsx("span", { className: "text-sm text-gray-700", children: roundTime ? new Date(roundTime).toLocaleString() : 'TBD' })) })] }), roundMatches.map((match) => {
@@ -372,7 +407,7 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                         }, title: "Swap players in this match", children: "Swap Players" }), _jsx("button", { className: "text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700", onClick: (e) => {
                                                             e.stopPropagation();
                                                             setSelectedMatch(match);
-                                                        }, children: "Enter Results" })] })), isAdmin && (tournament?.stage === 'completed' || round < (tournament?.current_round || 0)) && (_jsx("div", { className: "flex justify-end mt-2", children: _jsx("div", { className: "text-sm px-3 py-1 bg-gray-400 text-white rounded", children: tournament?.stage === 'completed' ? 'Tournament Completed - Editing Disabled' : 'Round Completed - Editing Disabled' }) }))] }))] }, match.id));
+                                                        }, children: "Enter Results" })] }))] }))] }, match.id));
                         })] }, round));
             }), selectedMatch && (_jsx(MatchResult, { match: selectedMatch, players: players, onClose: () => {
                     setSelectedMatch(null);

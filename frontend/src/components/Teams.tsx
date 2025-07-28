@@ -80,11 +80,6 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
                       Edit
                     </button>
                   )}
-                  {isAdmin && tournament && tournament.stage !== 'not_yet_started' && (
-                    <span className="px-2 py-1 text-gray-400 text-sm">
-                      Editing Disabled
-                    </span>
-                  )}
                 </div>
 
                 <div className="ml-6 text-sm text-gray-700">

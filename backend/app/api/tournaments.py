@@ -162,3 +162,33 @@ def complete_round(tournament_id: int, round_number: int, db: Session = Depends(
         "message": f"Round {round_number} completed successfully",
         "round_info": check_result
     }
+
+@router.get("/{tournament_id}/announcement")
+def get_tournament_announcement(tournament_id: int, db: Session = Depends(get_db)):
+    """Get the tournament announcement."""
+    tournament = crud.get_tournament(db, tournament_id)
+    if not tournament:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
+    
+    return {"announcement": tournament.announcement or ""}
+
+@router.post("/{tournament_id}/announcement")
+def update_tournament_announcement(
+    tournament_id: int, 
+    announcement_data: dict,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user)
+):
+    """Update the tournament announcement (admin only)."""
+    tournament = crud.get_tournament(db, tournament_id)
+    if not tournament:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
+    
+    announcement = announcement_data.get("announcement", "")
+    
+    # Update the tournament announcement
+    success = crud.update_tournament_announcement(db, tournament_id, announcement)
+    if not success:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to update announcement")
+    
+    return {"message": "Announcement updated successfully", "announcement": announcement}

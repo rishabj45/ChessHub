@@ -63,11 +63,11 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
         if (Math.abs(window.pageYOffset - scrollY) > 50 && visibleRound) {
           const element = document.getElementById(`round-${visibleRound}`);
           if (element) {
-            element.scrollIntoView({ behavior: 'auto', block: 'start' });
-            // Fine-tune position
-            setTimeout(() => {
-              window.scrollTo(scrollX, Math.max(0, scrollY));
-            }, 10);
+            // Calculate target position with header offset directly
+            const elementTop = element.offsetTop;
+            const headerOffset = 80;
+            const targetPosition = Math.max(0, elementTop - headerOffset);
+            window.scrollTo({ top: targetPosition, behavior: 'auto' });
           }
         }
       }, 50);
@@ -98,6 +98,12 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
         allMatches.push(...res);
       }
       setMatches(allMatches);
+      
+      // Also refresh round completion status for current round
+      const currentRound = tournament.current_round;
+      if (currentRound > 0 && isAdmin) {
+        await checkRoundCompletionStatus(currentRound);
+      }
     } catch (err) {
       console.error('Failed to refresh match data:', err);
     }
@@ -152,9 +158,9 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
       
       // Determine title based on the specific round number, not just tournament stage
       if (roundNumber === semiRound) {
-        return hideRoundNumber ? 'Semifinals' : `Round ${roundNumber} (Semi-finals)`;
+        return 'Semi Finals';
       } else if (roundNumber === finalRound) {
-        return hideRoundNumber ? 'Final & 3rd Place' : `Round ${roundNumber} (Final & 3rd Place)`;
+        return 'Final & 3rd Place';
       } else {
         return hideRoundNumber ? 'Knockout' : `Round ${roundNumber} (Knockout)`;
       }
@@ -231,9 +237,15 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
         setTimeout(() => {
           const currentRoundElement = document.getElementById(`round-${currentRound}`);
           if (currentRoundElement) {
-            currentRoundElement.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'start' 
+            // Calculate the target position accounting for sticky header
+            const elementTop = currentRoundElement.offsetTop;
+            const headerOffset = 80; // Height of sticky header + tabs
+            const targetPosition = Math.max(0, elementTop - headerOffset);
+            
+            // Scroll directly to the calculated position
+            window.scrollTo({
+              top: targetPosition,
+              behavior: 'smooth'
             });
           }
           setHasInitiallyScrolled(true);
@@ -314,12 +326,55 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     setCompletingRound(roundNumber);
     try {
       const result = await apiService.completeRound(tournament.id, roundNumber);
-      alert(`✅ Round ${roundNumber} completed successfully!\n\n${result.round_info.message || ''}`);
       
-      // Use professional scroll preservation for round completion
-      preserveScrollPosition(() => {
-        onUpdate();
-      });
+      // Immediately hide the Complete Round button by updating the status
+      setRoundCompletionStatus(prev => ({
+        ...prev,
+        [roundNumber]: { ...prev[roundNumber], can_complete: false }
+      }));
+      
+      // Update tournament data and handle new current round
+      await onUpdate();
+      
+      // Force refresh match data to ensure placeholder replacements are visible
+      // This is especially important after completing final group round or semi-finals
+      await refreshMatchData();
+      
+      // Refresh round completion status for all rounds since advancing stages may affect future rounds
+      if (isAdmin && tournament) {
+        for (let round = 1; round <= tournament.total_rounds; round++) {
+          await checkRoundCompletionStatus(round);
+        }
+      }
+      
+      // If there's a next round, expand its matches and scroll to it
+      const nextRound = roundNumber + 1;
+      const nextRoundMatches = matches.filter(m => m.round_number === nextRound);
+      if (nextRoundMatches.length > 0) {
+        // Expand all matches in the new current round
+        updateExpandedMatches((prev) => {
+          const newExpanded = { ...prev };
+          nextRoundMatches.forEach(match => {
+            newExpanded[match.id] = true;
+          });
+          return newExpanded;
+        });
+        
+        // Scroll to the new current round after a brief delay to allow for data refresh
+        setTimeout(() => {
+          const nextRoundElement = document.getElementById(`round-${nextRound}`);
+          if (nextRoundElement) {
+            const elementTop = nextRoundElement.offsetTop;
+            const headerOffset = 80;
+            const targetPosition = Math.max(0, elementTop - headerOffset);
+            
+            window.scrollTo({
+              top: targetPosition,
+              behavior: 'smooth'
+            });
+          }
+        }, 200); // Increased delay to allow for data refresh
+      }
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'Failed to complete round';
       if (errorMessage.includes('All matches must be completed')) {
@@ -367,7 +422,6 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
               }`}>
                 {getRoundTitle(round)} 
                 {isCurrentRound && <span className="ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded">Current</span>}
-                {isPastRound && <span className="ml-2 text-xs text-gray-500">(Completed)</span>}
               </h3>
               <div className="flex items-center gap-4">
                 {isAdmin ? (
@@ -394,43 +448,18 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                     {(() => {
                       const status = roundCompletionStatus[round];
                       const isCurrentRound = tournament?.current_round === round;
-                      const isCompleted = round < (tournament?.current_round || 0) || 
-                                        (status && status.reason === "Round is already completed");
                       
-                      if (isCompleted) {
-                        return (
-                          <span className="text-sm px-3 py-1 bg-green-500 text-white rounded">
-                            ✅ Completed
-                          </span>
-                        );
-                      }
-                      
-                      if (!isCurrentRound) {
-                        return null; // Don't show button for future rounds
-                      }
-                      
-                      if (status?.can_complete) {
+                      // Only show the Complete Round button if it's the current round and can be completed
+                      if (isCurrentRound && status?.can_complete) {
                         return (
                           <button
                             onClick={() => handleCompleteRound(round)}
                             disabled={completingRound === round}
                             className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                            title={status.message || `Complete round ${round} - All ${status.total_matches} matches finished`}
+                            title={status.message || `Complete round ${round}`}
                           >
                             {completingRound === round ? 'Completing...' : 'Complete Round'}
                           </button>
-                        );
-                      } else if (status) {
-                        const missingCount = status.missing_matches || 0;
-                        const tooltipText = status.reason || `${missingCount} matches still need results`;
-                        
-                        return (
-                          <span 
-                            className="text-sm px-3 py-1 bg-gray-400 text-white rounded cursor-help"
-                            title={tooltipText}
-                          >
-                            {status.completed_matches || 0}/{status.total_matches || 0} Finished
-                          </span>
                         );
                       }
                       
@@ -517,14 +546,6 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                           >
                             Enter Results
                           </button>
-                        </div>
-                      )}
-                      {/* Show locked message for completed tournaments or past rounds */}
-                      {isAdmin && (tournament?.stage === 'completed' || round < (tournament?.current_round || 0)) && (
-                        <div className="flex justify-end mt-2">
-                          <div className="text-sm px-3 py-1 bg-gray-400 text-white rounded">
-                            {tournament?.stage === 'completed' ? 'Tournament Completed - Editing Disabled' : 'Round Completed - Editing Disabled'}
-                          </div>
                         </div>
                       )}
                     </div>

@@ -17,6 +17,7 @@ class Tournament(Base):
     format = Column(String(50), default="round_robin")
     stage = Column(String(50), default="not_yet_started")  # not_yet_started, group, semi_final, final, completed
     is_current = Column(Boolean, default=False)
+    announcement = Column(Text)  # Tournament announcements by admin
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

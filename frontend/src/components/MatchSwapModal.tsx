@@ -277,9 +277,6 @@ const MatchSwapModal: React.FC<MatchSwapModalProps> = ({
           <p className="text-sm text-gray-700">
             <strong>Match:</strong> {getTeamName(match.white_team_id)} vs {getTeamName(match.black_team_id)}
           </p>
-          <p className="text-xs text-gray-600 mt-1">
-            Select 2 players from the same team to swap their positions. Playing players can swap boards, or substitute with bench players.
-          </p>
         </div>
 
         {error && (

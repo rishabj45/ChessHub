@@ -202,6 +202,26 @@ async getSwapHistory(matchId: number): Promise<any[]> {
   const res = await this.client.get(`/matches/${matchId}/swap-history`);
   return res.data;
 }
+
+// -- Announcements --
+async getTournamentAnnouncement(tournamentId: number): Promise<{ announcement: string }> {
+  try {
+    const res = await this.client.get(`/tournaments/${tournamentId}/announcement`);
+    return res.data;
+  } catch (error) {
+    // If endpoint doesn't exist yet, return empty announcement
+    return { announcement: '' };
+  }
+}
+
+async updateTournamentAnnouncement(tournamentId: number, announcement: string): Promise<void> {
+  try {
+    await this.client.post(`/tournaments/${tournamentId}/announcement`, { announcement });
+  } catch (error) {
+    // If endpoint doesn't exist yet, throw error for fallback to localStorage
+    throw error;
+  }
+}
 }
 
 export const apiService = new ApiService();

@@ -52,6 +52,15 @@ def delete_tournament(db: Session, tournament_id: int) -> bool:
     db.commit()
     return True
 
+def update_tournament_announcement(db: Session, tournament_id: int, announcement: str) -> bool:
+    """Update the tournament announcement."""
+    tour = get_tournament(db, tournament_id)
+    if not tour:
+        return False
+    tour.announcement = announcement
+    db.commit()
+    return True
+
 def set_current_tournament(db: Session, tournament_id: int) -> Optional[models.Tournament]:
     """Set a tournament as the current one, unsetting all others."""
     # First, unset all current tournaments

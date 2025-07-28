@@ -102,3 +102,15 @@ export function getStageDisplayText(tournament) {
     // Fallback
     return tournament.stage.charAt(0).toUpperCase() + tournament.stage.slice(1);
 }
+export function getFormatDisplayText(tournament) {
+    if (!tournament || !tournament.format)
+        return '';
+    switch (tournament.format) {
+        case 'round_robin':
+            return 'Round Robin';
+        case 'group_knockout':
+            return 'Group + Knockout';
+        default:
+            return tournament.format.charAt(0).toUpperCase() + tournament.format.slice(1);
+    }
+}

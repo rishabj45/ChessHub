@@ -38,6 +38,7 @@ class TournamentResponse(TournamentBase):
     total_rounds: Optional[int]
     format: TournamentFormat
     stage: str  # not_yet_started, group, semi_final, final, completed
+    announcement: Optional[str] = None
     class Config:
         from_attributes = True
 

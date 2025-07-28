@@ -37,36 +37,38 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
   const renderGroupStandings = (groupName: string, teams: any[]) => (
     <div className="mb-6">
       <h3 className="text-xl font-semibold mb-3 text-gray-800">Group {groupName}</h3>
-      <table className="w-full bg-white shadow rounded">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2">#</th>
-            <th className="p-2">Team</th>
-            <th className="p-2">MP</th>
-            <th className="p-2">W</th>
-            <th className="p-2">D</th>
-            <th className="p-2">L</th>
-            <th className="p-2">Match Pts</th>
-            <th className="p-2">Game Pts</th>
-            <th className="p-2">SB</th>
-          </tr>
-        </thead>
-        <tbody>
-          {teams.map((team, idx) => (
-            <tr key={team.id} className={idx < 2 ? 'bg-green-100 border-l-4 border-green-500' : ''}>
-              <td className="p-2 font-semibold">{idx + 1}</td>
-              <td className="p-2">{team.name}</td>
-              <td className="p-2">{team.matches_played}</td>
-              <td className="p-2">{team.wins}</td>
-              <td className="p-2">{team.draws}</td>
-              <td className="p-2">{team.losses}</td>
-              <td className="p-2 font-semibold">{team.match_points}</td>
-              <td className="p-2">{team.game_points}</td>
-              <td className="p-2">{team.sonneborn_berger?.toFixed(2)}</td>
+      <div className="overflow-auto max-h-96">
+        <table className="w-full bg-white shadow rounded">
+          <thead className="bg-gray-100 sticky top-0 z-10">
+            <tr>
+              <th className="p-2 bg-gray-100 text-center">#</th>
+              <th className="p-2 bg-gray-100 text-left">Team</th>
+              <th className="p-2 bg-gray-100 text-center">MP</th>
+              <th className="p-2 bg-gray-100 text-center">W</th>
+              <th className="p-2 bg-gray-100 text-center">D</th>
+              <th className="p-2 bg-gray-100 text-center">L</th>
+              <th className="p-2 bg-gray-100 text-center">Match Pts</th>
+              <th className="p-2 bg-gray-100 text-center">Game Pts</th>
+              <th className="p-2 bg-gray-100 text-center">SB</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {teams.map((team, idx) => (
+              <tr key={team.id} className={idx < 2 ? 'bg-green-100 border-l-4 border-green-500' : ''}>
+                <td className="p-2 font-semibold text-center">{idx + 1}</td>
+                <td className="p-2 text-left">{team.name}</td>
+                <td className="p-2 text-center">{team.matches_played}</td>
+                <td className="p-2 text-center">{team.wins}</td>
+                <td className="p-2 text-center">{team.draws}</td>
+                <td className="p-2 text-center">{team.losses}</td>
+                <td className="p-2 font-semibold text-center">{team.match_points}</td>
+                <td className="p-2 text-center">{team.game_points}</td>
+                <td className="p-2 text-center">{team.sonneborn_berger?.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
@@ -112,36 +114,38 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
             </p>
           </div>
           
-          <table className="w-full bg-white shadow rounded">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2">#</th>
-                <th className="p-2">Team</th>
-                <th className="p-2">MP</th>
-                <th className="p-2">W</th>
-                <th className="p-2">D</th>
-                <th className="p-2">L</th>
-                <th className="p-2">Match Pts</th>
-                <th className="p-2">Game Pts</th>
-                <th className="p-2">SB</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((s, idx) => (
-                <tr key={s.team_id}>
-                  <td className="p-2 font-semibold">{idx + 1}</td>
-                  <td className="p-2">{s.team_name}</td>
-                  <td className="p-2">{s.matches_played}</td>
-                  <td className="p-2">{s.wins}</td>
-                  <td className="p-2">{s.draws}</td>
-                  <td className="p-2">{s.losses}</td>
-                  <td className="p-2 font-semibold">{s.match_points}</td>
-                  <td className="p-2">{s.game_points}</td>
-                  <td className="p-2">{s.sonneborn_berger.toFixed(2)}</td>
+          <div className="overflow-auto max-h-96">
+            <table className="w-full bg-white shadow rounded">
+              <thead className="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th className="p-2 bg-gray-100 text-center">#</th>
+                  <th className="p-2 bg-gray-100 text-left">Team</th>
+                  <th className="p-2 bg-gray-100 text-center">MP</th>
+                  <th className="p-2 bg-gray-100 text-center">W</th>
+                  <th className="p-2 bg-gray-100 text-center">D</th>
+                  <th className="p-2 bg-gray-100 text-center">L</th>
+                  <th className="p-2 bg-gray-100 text-center">Match Pts</th>
+                  <th className="p-2 bg-gray-100 text-center">Game Pts</th>
+                  <th className="p-2 bg-gray-100 text-center">SB</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {standings.map((s, idx) => (
+                  <tr key={s.team_id}>
+                    <td className="p-2 font-semibold text-center">{idx + 1}</td>
+                    <td className="p-2 text-left">{s.team_name}</td>
+                    <td className="p-2 text-center">{s.matches_played}</td>
+                    <td className="p-2 text-center">{s.wins}</td>
+                    <td className="p-2 text-center">{s.draws}</td>
+                    <td className="p-2 text-center">{s.losses}</td>
+                    <td className="p-2 font-semibold text-center">{s.match_points}</td>
+                    <td className="p-2 text-center">{s.game_points}</td>
+                    <td className="p-2 text-center">{s.sonneborn_berger.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

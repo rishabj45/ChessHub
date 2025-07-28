@@ -143,5 +143,25 @@ class ApiService {
         const res = await this.client.get(`/matches/${matchId}/swap-history`);
         return res.data;
     }
+    // -- Announcements --
+    async getTournamentAnnouncement(tournamentId) {
+        try {
+            const res = await this.client.get(`/tournaments/${tournamentId}/announcement`);
+            return res.data;
+        }
+        catch (error) {
+            // If endpoint doesn't exist yet, return empty announcement
+            return { announcement: '' };
+        }
+    }
+    async updateTournamentAnnouncement(tournamentId, announcement) {
+        try {
+            await this.client.post(`/tournaments/${tournamentId}/announcement`, { announcement });
+        }
+        catch (error) {
+            // If endpoint doesn't exist yet, throw error for fallback to localStorage
+            throw error;
+        }
+    }
 }
 export const apiService = new ApiService();

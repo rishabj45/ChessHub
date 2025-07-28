@@ -339,20 +339,6 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
               <option value="round_robin">Round Robin - All teams play each other</option>
               <option value="group_knockout">Group + Knockout - Teams split into groups, top 2 advance to knockout</option>
             </select>
-            
-            {formData.format === 'group_knockout' && (
-              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <p className="text-sm text-yellow-800">
-                  <strong>Group + Knockout Format:</strong>
-                  <br />• Teams are split into 2 groups
-                  <br />• Each group plays round-robin
-                  <br />• Top 2 from each group advance to semi-finals
-                  <br />• Semi-finals: A1 vs B2, A2 vs B1
-                  <br />• Final & 3rd place matches (in same round)
-                  <br />• Requires even number of teams (minimum 4)
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Tournament Statistics */}

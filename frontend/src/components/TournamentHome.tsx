@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { Tournament } from '@/types';
-import { Trophy, Calendar, MapPin, Info, Users, Target, Crown } from 'lucide-react';
+import { Trophy, Calendar, MapPin, Info, Target, Crown } from 'lucide-react';
 import { getProgressDisplay, getStageDisplayText } from '@/utils/helpers';
 
 interface TournamentHomeProps {
@@ -15,30 +15,56 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
   const [finalRankings, setFinalRankings] = useState<any>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [groupStandings, setGroupStandings] = useState<{ group_a: any[], group_b: any[] }>({ group_a: [], group_b: [] });
+  const [announcement, setAnnouncement] = useState('');
+  const [currentAnnouncement, setCurrentAnnouncement] = useState('');
+  const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false);
 
   useEffect(() => {
     const loadAdminData = async () => {
-      if (!tournament || !isAdmin) return;
+      if (!tournament) return;
 
       try {
-        if (tournament.format === 'group_knockout') {
-          const groupData = await apiService.getGroupStandings();
-          setGroupStandings(groupData);
-
-          // Check completion possibility for final stage
-          if (tournament.stage === 'final') {
-            const completeData = await apiService.canCompleteTournament(tournament.id);
-            setCanComplete(completeData.can_complete);
+        // Try to load announcement from API, fallback to localStorage
+        try {
+          const announcementData = await apiService.getTournamentAnnouncement(tournament.id);
+          if (announcementData.announcement) {
+            setCurrentAnnouncement(announcementData.announcement);
+            if (isAdmin) {
+              setAnnouncement(announcementData.announcement);
+            }
+          }
+        } catch (error) {
+          // Fallback to localStorage if API is not available
+          const savedAnnouncement = localStorage.getItem(`tournament_${tournament.id}_announcement`);
+          if (savedAnnouncement) {
+            setCurrentAnnouncement(savedAnnouncement);
+            if (isAdmin) {
+              setAnnouncement(savedAnnouncement);
+            }
           }
         }
 
-        // Get final rankings if tournament is completed
-        if (tournament.stage === 'completed') {
-          const rankings = await apiService.getFinalRankings(tournament.id);
-          setFinalRankings(rankings);
+        // Admin-only data loading
+        if (isAdmin) {
+          if (tournament.format === 'group_knockout') {
+            const groupData = await apiService.getGroupStandings();
+            setGroupStandings(groupData);
+
+            // Check completion possibility for final stage
+            if (tournament.stage === 'final') {
+              const completeData = await apiService.canCompleteTournament(tournament.id);
+              setCanComplete(completeData.can_complete);
+            }
+          }
+
+          // Get final rankings if tournament is completed
+          if (tournament.stage === 'completed') {
+            const rankings = await apiService.getFinalRankings(tournament.id);
+            setFinalRankings(rankings);
+          }
         }
       } catch (error) {
-        console.error('Error loading admin data:', error);
+        console.error('Error loading data:', error);
       }
     };
 
@@ -51,7 +77,6 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
     setIsAdvancing(true);
     try {
       await apiService.completeTournament(tournament.id);
-      alert('Tournament completed! Final rankings are now available.');
       onUpdate();
       setCanComplete(false);
       
@@ -72,13 +97,34 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
     setIsAdvancing(true);
     try {
       await apiService.startTournament(tournament.id);
-      alert('Tournament started! Teams and players can no longer be edited.');
       onUpdate(); // Refresh tournament data
     } catch (error) {
       console.error('Error starting tournament:', error);
       alert('Failed to start tournament. Make sure you have at least 2 teams.');
     } finally {
       setIsAdvancing(false);
+    }
+  };
+
+  const handleSaveAnnouncement = async () => {
+    if (!tournament) return;
+    
+    setIsSavingAnnouncement(true);
+    try {
+      // Try API first, fallback to localStorage
+      try {
+        await apiService.updateTournamentAnnouncement(tournament.id, announcement);
+      } catch (error) {
+        // Fallback to localStorage if API is not available
+        localStorage.setItem(`tournament_${tournament.id}_announcement`, announcement);
+      }
+      
+      setCurrentAnnouncement(announcement);
+    } catch (error) {
+      console.error('Error saving announcement:', error);
+      alert('Failed to save announcement. Please try again.');
+    } finally {
+      setIsSavingAnnouncement(false);
     }
   };
 
@@ -150,9 +196,22 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
     <div className="space-y-6">
       {/* Tournament Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
-        <div className="flex items-center mb-4">
-          <Trophy className="h-8 w-8 mr-3" />
-          <h1 className="text-3xl font-bold">{tournament.name}</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <Trophy className="h-8 w-8 mr-3" />
+            <h1 className="text-3xl font-bold">{tournament.name}</h1>
+          </div>
+          
+          {/* Start Tournament Button in Header */}
+          {isAdmin && tournament.stage === 'not_yet_started' && (
+            <button
+              onClick={handleStartTournament}
+              disabled={isAdvancing}
+              className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-semibold shadow-lg transition-colors duration-200"
+            >
+              {isAdvancing ? 'Starting...' : 'Start Tournament'}
+            </button>
+          )}
         </div>
         
         {tournament.description && (
@@ -239,9 +298,53 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Announcement Display for All Users */}
+      {currentAnnouncement && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 shadow-lg">
+          <div className="flex items-center mb-4">
+            <Info className="h-6 w-6 mr-2 text-blue-600" />
+            <h2 className="text-xl font-semibold text-blue-800">Tournament Announcement</h2>
+          </div>
+          
+          <div className="bg-white border border-blue-100 rounded-lg p-4">
+            <p className="text-gray-700 whitespace-pre-wrap">{currentAnnouncement}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Announcements */}
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-6 shadow-lg">
+          <div className="flex items-center mb-4">
+            <Info className="h-6 w-6 mr-2 text-amber-600" />
+            <h2 className="text-xl font-semibold text-amber-800">Admin Announcements</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <textarea
+              placeholder="Add tournament announcements, important notes, or updates for participants..."
+              className="w-full p-4 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none"
+              rows={4}
+              value={announcement}
+              onChange={(e) => setAnnouncement(e.target.value)}
+            />
+            
+            <div className="flex justify-end">
+              <button 
+                onClick={handleSaveAnnouncement}
+                disabled={isSavingAnnouncement}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 font-medium transition-colors duration-200"
+              >
+                {isSavingAnnouncement ? 'Saving...' : 'Save Announcement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-center">
         {/* Tournament Information */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-white p-6 rounded-lg shadow max-w-2xl w-full">
           <div className="flex items-center mb-4">
             <Info className="h-6 w-6 mr-2 text-blue-600" />
             <h2 className="text-xl font-semibold">Tournament Information</h2>
@@ -256,126 +359,11 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
             </div>
             
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2">Current Stage</h3>
-              <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                {getStageDisplayText(tournament)}
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-1">Tournament ID</h3>
-                <p className="text-sm text-gray-600">#{tournament.id}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-1">Total Rounds</h3>
-                <p className="text-sm text-gray-600">{tournament.total_rounds}</p>
-              </div>
+              <h3 className="font-semibold text-gray-700 mb-1">Total Rounds</h3>
+              <p className="text-sm text-gray-600">{tournament.total_rounds}</p>
             </div>
           </div>
         </div>
-
-        {/* Admin Controls */}
-        {isAdmin && (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center mb-4">
-              <Users className="h-6 w-6 mr-2 text-green-600" />
-              <h2 className="text-xl font-semibold">Tournament Administration</h2>
-            </div>
-            
-            <div className="space-y-4">
-              {/* Start Tournament Control */}
-              {tournament.stage === 'not_yet_started' && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
-                  <h3 className="font-semibold text-yellow-800 mb-2">Start Tournament</h3>
-                  <button
-                    onClick={handleStartTournament}
-                    disabled={isAdvancing}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 mb-2"
-                  >
-                    {isAdvancing ? 'Starting...' : 'Start Tournament'}
-                  </button>
-                  <p className="text-sm text-yellow-700">
-                    Click to begin the tournament. Teams and players cannot be edited after starting.
-                  </p>
-                </div>
-              )}
-
-              {/* Tournament Stage Controls */}
-              {tournament.format === 'group_knockout' && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                  <h3 className="font-semibold text-blue-800 mb-2">Stage Progression</h3>
-                  
-                  {tournament.stage === 'group' && (
-                    <p className="text-sm text-blue-700">
-                      Complete all group stage rounds to automatically advance to semi-finals.
-                    </p>
-                  )}
-                  
-                  {tournament.stage === 'semifinal' && (
-                    <p className="text-sm text-blue-700">
-                      Complete all semi-final rounds to automatically advance to finals.
-                    </p>
-                  )}
-                  
-                  {tournament.stage === 'final' && (
-                    <div>
-                      {canComplete ? (
-                        <div>
-                          <button
-                            onClick={handleCompleteTournament}
-                            disabled={isAdvancing}
-                            className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 mb-2"
-                          >
-                            {isAdvancing ? 'Completing...' : 'Complete Tournament'}
-                          </button>
-                          <p className="text-sm text-blue-700">
-                            Final and 3rd place matches are completed. Click to finalize tournament results.
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-blue-700">
-                          Complete final and 3rd place matches to finish the tournament.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  
-                  {tournament.stage === 'completed' && (
-                    <div className="bg-green-100 border border-green-300 rounded p-3">
-                      <p className="text-green-800 text-sm font-medium">
-                        ✅ Tournament completed! Final rankings are displayed above.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Current Restrictions Notice */}
-              {tournament.stage === 'completed' && (
-                <div className="bg-yellow-50 border border-yellow-300 rounded p-4">
-                  <h3 className="font-semibold text-yellow-800 mb-2">Tournament Locked</h3>
-                  <div className="text-sm text-yellow-700 space-y-1">
-                    <p>• Player swapping is disabled</p>
-                    <p>• Match results cannot be edited</p>
-                    <p>• Tournament progression is complete</p>
-                  </div>
-                </div>
-              )}
-
-              {tournament.stage !== 'completed' && (
-                <div className="bg-gray-50 border border-gray-300 rounded p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">Available Actions</h3>
-                  <div className="text-sm text-gray-700 space-y-1">
-                    <p>• Edit match results in Schedule tab</p>
-                    <p>• Swap players before matches are completed</p>
-                    <p>• Monitor tournament progress in Standings tab</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

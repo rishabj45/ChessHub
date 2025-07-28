@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trophy, Calendar, Play, Trash2, Crown } from 'lucide-react';
+import { Plus, Trophy, Calendar, Play, Trash2, Crown, MapPin } from 'lucide-react';
 import TournamentCreator from './TournamentCreator';
 import { apiService } from '@/services/api';
 import { Tournament } from '@/types';
-import { getStageDescription, getStageDisplayText } from '@/utils/helpers';
+import { getFormatDisplayText, getStageDisplayText } from '@/utils/helpers';
 
 interface TournamentManagerProps {
   isAdmin: boolean;
@@ -104,7 +104,6 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
     setCompleting(tournamentId);
     try {
       await apiService.completeTournament(tournamentId);
-      alert('✅ Tournament completed successfully!');
       await loadTournaments();
       await onTournamentChanged();
     } catch (error: any) {
@@ -123,23 +122,6 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  const getStageColor = (stage: string) => {
-    switch (stage.toLowerCase()) {
-      case 'not_yet_started':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'group':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'semi_final':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'final':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'completed':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      default:
-        return 'bg-green-100 text-green-800 border-green-200';
-    }
   };
 
   if (showCreator) {
@@ -231,16 +213,9 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                       </div>
                     )}
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium border ${getStageColor(
-                        tournament.stage
-                      )}`}
+                      className="px-2 py-1 rounded-full text-xs font-medium border bg-blue-100 text-blue-800 border-blue-200"
                     >
-                      {tournament.stage === 'not_yet_started' 
-                        ? 'Yet to start' 
-                        : tournament.stage === 'completed'
-                          ? 'Completed'
-                          : tournament.stage.replace(/_/g, ' ')
-                      }
+                      {getFormatDisplayText(tournament)}
                     </span>
                   </div>
 
@@ -248,7 +223,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                     <p className="text-gray-600 mb-3">{tournament.description}</p>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div className="flex items-center text-gray-600">
                       <Calendar className="w-4 h-4 mr-2" />
                       <div>
@@ -262,6 +237,16 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                       <div>
                         <div className="font-medium">End</div>
                         <div>{formatDate(tournament.end_date)}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center text-gray-600">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      <div>
+                        <div className="font-medium">Venue</div>
+                        <div className="text-sm">
+                          {tournament.venue || 'TBD'}
+                        </div>
                       </div>
                     </div>
 
