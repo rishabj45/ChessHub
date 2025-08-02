@@ -260,6 +260,34 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         // Remove group A/B labels in brackets for group+knockout format matches
         return '';
     };
+    const getMatchTypeLabel = (match, roundNumber) => {
+        if (!tournament || getRoundType(roundNumber) !== 'knockout') {
+            return '';
+        }
+        const totalRounds = tournament.total_rounds;
+        const finalRound = totalRounds;
+        // Only for the final round (which contains both Final and 3rd Place matches)
+        if (roundNumber === finalRound) {
+            // In knockout tournaments, typically the final round has 2 matches:
+            // - One is the Final (between semi-final winners)
+            // - One is the 3rd Place match (between semi-final losers)
+            // We can identify this by looking at team IDs or match order
+            // Usually the Final has higher-ranked teams or comes first
+            // For now, we'll use a simple heuristic based on match ID or team IDs
+            const roundMatches = matches.filter(m => m.round_number === roundNumber);
+            if (roundMatches.length === 2) {
+                // Sort matches by ID to get consistent ordering
+                const sortedMatches = [...roundMatches].sort((a, b) => a.id - b.id);
+                if (match.id === sortedMatches[0].id) {
+                    return 'Final';
+                }
+                else {
+                    return '3rd Place';
+                }
+            }
+        }
+        return '';
+    };
     const groupedByRound = matches.reduce((acc, match) => {
         acc[match.round_number] = acc[match.round_number] || [];
         acc[match.round_number].push(match);
@@ -406,21 +434,40 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                             return (_jsxs("div", { className: "bg-white p-4 border-b", children: [_jsxs("div", { className: "flex justify-between items-center mb-2 cursor-pointer", onClick: () => updateExpandedMatches((prev) => ({
                                             ...prev,
                                             [match.id]: !prev[match.id],
-                                        })), children: [_jsxs("p", { className: "text-lg font-semibold", children: [getTeamName(match.white_team_id), getGroupLabel(match.white_team_id, round), " vs ", getTeamName(match.black_team_id), getGroupLabel(match.black_team_id, round), " (", match.white_score ?? 0, "\u2013", match.black_score ?? 0, ")"] }), _jsx("span", { className: "text-sm text-blue-600", children: expanded ? 'Hide Boards ▲' : 'Show Boards ▼' })] }), expanded && (_jsxs("div", { className: "text-sm grid gap-2", children: [match.games.map((game) => {
-                                                const board = game.board_number;
-                                                const whitePlayer = getPlayer(game.white_player_id);
-                                                const blackPlayer = getPlayer(game.black_player_id);
-                                                const leftIcon = board === 1 || board === 3 ? '♔' : '♚';
-                                                const rightIcon = board === 1 || board === 3 ? '♚' : '♔';
-                                                return (_jsxs("div", { className: "flex items-center justify-between bg-gray-50 p-2 rounded", children: [_jsxs("div", { className: "flex gap-2 items-center w-1/2", children: [_jsx("span", { children: leftIcon }), _jsx("span", { children: whitePlayer?.name || 'Unknown' })] }), _jsx(InlineGameResult, { game: game, matchId: match.id, isAdmin: isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round, whitePlayerName: whitePlayer?.name || 'Unknown', blackPlayerName: blackPlayer?.name || 'Unknown', onResultUpdate: () => {
-                                                                preserveScrollPosition(() => {
-                                                                    refreshMatchData();
-                                                                });
-                                                                if (tournament && round === tournament.current_round) {
-                                                                    checkRoundCompletionStatus(round);
-                                                                }
-                                                            } }), _jsxs("div", { className: "flex gap-2 justify-end items-center w-1/2 text-right", children: [_jsx("span", { children: blackPlayer?.name || 'Unknown' }), _jsx("span", { children: rightIcon })] })] }, game.id));
-                                            }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsx("div", { className: "flex justify-end mt-2 gap-2", children: _jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
+                                        })), children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsxs("p", { className: "text-lg font-semibold", children: [getTeamName(match.white_team_id), getGroupLabel(match.white_team_id, round), " vs ", getTeamName(match.black_team_id), getGroupLabel(match.black_team_id, round), " (", match.white_score ?? 0, "\u2013", match.black_score ?? 0, ")"] }), getMatchTypeLabel(match, round) && (_jsx("span", { className: `px-2 py-1 rounded text-sm font-medium ${getMatchTypeLabel(match, round) === 'Final'
+                                                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+                                                                    : 'bg-orange-100 text-orange-800 border border-orange-300'}`, children: getMatchTypeLabel(match, round) }))] }), match.is_completed && ((() => {
+                                                        // Check if this match was decided by tiebreaker (regardless of current result)
+                                                        if (getRoundType(round) === 'knockout' && match.tiebreaker?.is_completed && match.tiebreaker?.winner_team_id) {
+                                                            return (_jsx("span", { className: "px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800", children: `${getTeamName(match.tiebreaker.winner_team_id)} Winner (Tiebreaker)` }));
+                                                        }
+                                                        // For knockout rounds with draws but no completed tiebreaker yet
+                                                        if (match.result === 'draw' && getRoundType(round) === 'knockout') {
+                                                            return null; // Don't show anything for incomplete tiebreakers
+                                                        }
+                                                        // For all other cases (regular wins, group stage draws)
+                                                        return (_jsx("span", { className: `px-3 py-1 rounded-full text-sm font-medium ${match.result === 'white_win' ? 'bg-green-100 text-green-800' :
+                                                                match.result === 'black_win' ? 'bg-green-100 text-green-800' :
+                                                                    match.result === 'draw' ? 'bg-yellow-100 text-yellow-800' :
+                                                                        'bg-gray-100 text-gray-800'}`, children: match.result === 'white_win' ? `${getTeamName(match.white_team_id)} Winner` :
+                                                                match.result === 'black_win' ? `${getTeamName(match.black_team_id)} Winner` :
+                                                                    match.result === 'draw' ? 'Draw' :
+                                                                        'Result Pending' }));
+                                                    })())] }), _jsx("span", { className: "text-sm text-blue-600", children: expanded ? 'Hide Boards ▲' : 'Show Boards ▼' })] }), expanded && (_jsxs("div", { className: "text-sm", children: [_jsx("div", { className: "grid gap-2", children: match.games.map((game) => {
+                                                    const board = game.board_number;
+                                                    const whitePlayer = getPlayer(game.white_player_id);
+                                                    const blackPlayer = getPlayer(game.black_player_id);
+                                                    const leftIcon = board === 1 || board === 3 ? '♔' : '♚';
+                                                    const rightIcon = board === 1 || board === 3 ? '♚' : '♔';
+                                                    return (_jsxs("div", { className: "flex items-center justify-between bg-gray-50 p-2 rounded", children: [_jsxs("div", { className: "flex gap-2 items-center w-1/2", children: [_jsx("span", { children: leftIcon }), _jsx("span", { children: whitePlayer?.name || 'Unknown' })] }), _jsx(InlineGameResult, { game: game, matchId: match.id, isAdmin: isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round, whitePlayerName: whitePlayer?.name || 'Unknown', blackPlayerName: blackPlayer?.name || 'Unknown', onResultUpdate: () => {
+                                                                    preserveScrollPosition(() => {
+                                                                        refreshMatchData();
+                                                                    });
+                                                                    if (tournament && round === tournament.current_round) {
+                                                                        checkRoundCompletionStatus(round);
+                                                                    }
+                                                                } }), _jsxs("div", { className: "flex gap-2 justify-end items-center w-1/2 text-right", children: [_jsx("span", { children: blackPlayer?.name || 'Unknown' }), _jsx("span", { children: rightIcon })] })] }, game.id));
+                                                }) }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsx("div", { className: "flex justify-end mt-2 gap-2", children: _jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
                                                         e.stopPropagation();
                                                         setSelectedMatchForSwap(match);
                                                     }, title: "Swap players in this match", children: "Swap Players" }) })), match.tiebreaker && (_jsx(Tiebreaker, { tiebreaker: match.tiebreaker, whiteTeamName: getTeamName(match.white_team_id), blackTeamName: getTeamName(match.black_team_id), isAdmin: isAdmin, onTiebreakerComplete: () => {
