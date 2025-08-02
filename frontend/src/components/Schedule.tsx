@@ -351,6 +351,34 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     });
   };
 
+  const handleColorSwap = async (matchId: number) => {
+    if (!tournament) return;
+    
+    try {
+      await apiService.swapMatchColors(matchId);
+      
+      // First refresh match data to get updated results
+      await refreshMatchData();
+      
+      // Refresh round completion status for current round since results may have changed
+      if (tournament.current_round > 0 && isAdmin) {
+        await checkRoundCompletionStatus(tournament.current_round);
+      }
+      
+      // Trigger tournament update to refresh standings and statistics
+      await onUpdate();
+      
+      // Finally refresh match data again to ensure all updates are reflected
+      // Use scroll preservation for the final refresh
+      preserveScrollPosition(() => {
+        refreshMatchData();
+      });
+    } catch (error: any) {
+      console.error('Failed to swap colors:', error);
+      alert(error.response?.data?.detail || 'Failed to swap team colors');
+    }
+  };
+
   const checkRoundCompletionStatus = async (roundNumber: number) => {
     if (!tournament) return;
     
@@ -657,6 +685,20 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                           >
                             Swap Players
                           </button>
+                          
+                          {/* Color swap button - only for knockout matches */}
+                          {getRoundType(round) === 'knockout' && (
+                            <button
+                              className="text-sm px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleColorSwap(match.id);
+                              }}
+                              title="Swap team colors (white team becomes black, black team becomes white)"
+                            >
+                              Swap Colors
+                            </button>
+                          )}
                         </div>
                       )}
 

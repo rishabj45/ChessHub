@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { GameResponse } from '@/types';
 
@@ -21,6 +21,11 @@ const InlineGameResult: React.FC<InlineGameResultProps> = ({
 }) => {
   const [currentResult, setCurrentResult] = useState<string>(game.result || 'pending');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Update local state when game result changes (e.g., after color swap)
+  useEffect(() => {
+    setCurrentResult(game.result || 'pending');
+  }, [game.result]);
 
   const handleResultSelect = async (resultType: string) => {
     if (!isAdmin || isSubmitting) return;

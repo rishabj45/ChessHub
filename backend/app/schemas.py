@@ -193,6 +193,10 @@ class MatchSwapRequest(BaseModel):
     white_team_swaps: List[TeamSwapData] = []
     black_team_swaps: List[TeamSwapData] = []
 
+class ColorSwapRequest(BaseModel):
+    """Request to swap team colors in a knockout match"""
+    pass  # No additional data needed - just swap all players' colors
+
 class TiebreakerResponse(BaseModel):
     id: int
     match_id: int

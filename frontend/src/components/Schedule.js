@@ -307,6 +307,30 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
             refreshMatchData();
         });
     };
+    const handleColorSwap = async (matchId) => {
+        if (!tournament)
+            return;
+        try {
+            await apiService.swapMatchColors(matchId);
+            // First refresh match data to get updated results
+            await refreshMatchData();
+            // Refresh round completion status for current round since results may have changed
+            if (tournament.current_round > 0 && isAdmin) {
+                await checkRoundCompletionStatus(tournament.current_round);
+            }
+            // Trigger tournament update to refresh standings and statistics
+            await onUpdate();
+            // Finally refresh match data again to ensure all updates are reflected
+            // Use scroll preservation for the final refresh
+            preserveScrollPosition(() => {
+                refreshMatchData();
+            });
+        }
+        catch (error) {
+            console.error('Failed to swap colors:', error);
+            alert(error.response?.data?.detail || 'Failed to swap team colors');
+        }
+    };
     const checkRoundCompletionStatus = async (roundNumber) => {
         if (!tournament)
             return;
@@ -467,10 +491,13 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                                         checkRoundCompletionStatus(round);
                                                                     }
                                                                 } }), _jsxs("div", { className: "flex gap-2 justify-end items-center w-1/2 text-right", children: [_jsx("span", { children: blackPlayer?.name || 'Unknown' }), _jsx("span", { children: rightIcon })] })] }, game.id));
-                                                }) }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsx("div", { className: "flex justify-end mt-2 gap-2", children: _jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedMatchForSwap(match);
-                                                    }, title: "Swap players in this match", children: "Swap Players" }) })), match.tiebreaker && (_jsx(Tiebreaker, { tiebreaker: match.tiebreaker, whiteTeamName: getTeamName(match.white_team_id), blackTeamName: getTeamName(match.black_team_id), isAdmin: isAdmin, onTiebreakerComplete: () => {
+                                                }) }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsxs("div", { className: "flex justify-end mt-2 gap-2", children: [_jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedMatchForSwap(match);
+                                                        }, title: "Swap players in this match", children: "Swap Players" }), getRoundType(round) === 'knockout' && (_jsx("button", { className: "text-sm px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600", onClick: (e) => {
+                                                            e.stopPropagation();
+                                                            handleColorSwap(match.id);
+                                                        }, title: "Swap team colors (white team becomes black, black team becomes white)", children: "Swap Colors" }))] })), match.tiebreaker && (_jsx(Tiebreaker, { tiebreaker: match.tiebreaker, whiteTeamName: getTeamName(match.white_team_id), blackTeamName: getTeamName(match.black_team_id), isAdmin: isAdmin, onTiebreakerComplete: () => {
                                                     // Refresh match data and round completion status
                                                     preserveScrollPosition(() => {
                                                         refreshMatchData();

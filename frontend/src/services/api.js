@@ -138,6 +138,10 @@ class ApiService {
     async swapMatchPlayers(matchId, swapData) {
         await this.client.post(`/matches/${matchId}/swap-players`, swapData);
     }
+    // Swap team colors for knockout matches
+    async swapMatchColors(matchId) {
+        await this.client.post(`/matches/${matchId}/swap-colors`);
+    }
     // Get swap history for a match (optional)
     async getSwapHistory(matchId) {
         const res = await this.client.get(`/matches/${matchId}/swap-history`);

@@ -197,6 +197,11 @@ async swapMatchPlayers(
   await this.client.post(`/matches/${matchId}/swap-players`, swapData);
 }
 
+// Swap team colors for knockout matches
+async swapMatchColors(matchId: number): Promise<void> {
+  await this.client.post(`/matches/${matchId}/swap-colors`);
+}
+
 // Get swap history for a match (optional)
 async getSwapHistory(matchId: number): Promise<any[]> {
   const res = await this.client.get(`/matches/${matchId}/swap-history`);

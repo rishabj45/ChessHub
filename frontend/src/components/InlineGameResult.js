@@ -1,9 +1,13 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 const InlineGameResult = ({ game, matchId, isAdmin, whitePlayerName, blackPlayerName, onResultUpdate }) => {
     const [currentResult, setCurrentResult] = useState(game.result || 'pending');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Update local state when game result changes (e.g., after color swap)
+    useEffect(() => {
+        setCurrentResult(game.result || 'pending');
+    }, [game.result]);
     const handleResultSelect = async (resultType) => {
         if (!isAdmin || isSubmitting)
             return;

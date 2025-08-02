@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from ..schemas import GameSimpleResultUpdate
-from ..models import Game, Match , Round , Player
+from ..models import Game, Match, Round, Player, Tournament, Tiebreaker
 from ..database import get_db
-from ..schemas import MatchResponse , GameSimpleResultUpdate , MatchRescheduleRequest ,SwapPlayersRequest, MatchSwapRequest
+from ..schemas import MatchResponse, GameSimpleResultUpdate, MatchRescheduleRequest, SwapPlayersRequest, MatchSwapRequest, ColorSwapRequest
 from ..auth_utils import get_current_user
 from .. import crud
 from ..tournament_logic import recalculate_tournament_stats
@@ -268,3 +268,96 @@ def swap_match_players(
     recalculate_tournament_stats(db, match.tournament_id)
 
     return {"message": "Match players swapped successfully, results preserved"}
+
+@router.post("/{match_id}/swap-colors")
+def swap_match_colors(
+    match_id: int,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user)
+):
+    """Swap team colors for knockout matches - all white team players become black, and vice versa"""
+    from ..tournament_logic import recalculate_tournament_stats
+    
+    match = db.query(Match).filter(Match.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Get tournament to check if it's in knockout stage
+    tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    # Check if this is a knockout stage match
+    from ..tournament_logic import is_knockout_stage
+    if not is_knockout_stage(tournament, match.round_number):
+        raise HTTPException(status_code=400, detail="Color swap is only allowed for knockout stage matches")
+    
+    # Get all games for this match
+    games = db.query(Game).filter(Game.match_id == match_id).order_by(Game.board_number).all()
+    if not games:
+        raise HTTPException(status_code=400, detail="No games found for this match")
+    
+    # Swap the team colors at match level
+    original_white_team_id = match.white_team_id
+    original_black_team_id = match.black_team_id
+    
+    match.white_team_id = original_black_team_id
+    match.black_team_id = original_white_team_id
+    
+    # Swap the player colors for all games and preserve results
+    for game in games:
+        original_white_player_id = game.white_player_id
+        original_black_player_id = game.black_player_id
+        
+        game.white_player_id = original_black_player_id
+        game.black_player_id = original_white_player_id
+        
+        # Swap game results if they exist
+        if game.result:
+            if game.result == "white_win":
+                game.result = "black_win"
+            elif game.result == "black_win":
+                game.result = "white_win"
+            # Draw stays the same
+        
+        # Swap scores too
+        original_white_score = game.white_score
+        original_black_score = game.black_score
+        game.white_score = original_black_score
+        game.black_score = original_white_score
+    
+    # Swap match level results and scores
+    if match.result:
+        if match.result == "white_win":
+            match.result = "black_win"
+        elif match.result == "black_win":
+            match.result = "white_win"
+        # Draw stays the same
+    
+    original_white_score = match.white_score
+    original_black_score = match.black_score
+    match.white_score = original_black_score
+    match.black_score = original_white_score
+    
+    # Handle tiebreaker if it exists
+    tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.match_id == match_id).first()
+    if tiebreaker:
+        # Swap tiebreaker team assignments
+        original_white_team = tiebreaker.white_team_id
+        original_black_team = tiebreaker.black_team_id
+        
+        tiebreaker.white_team_id = original_black_team
+        tiebreaker.black_team_id = original_white_team
+        
+        # Update winner team ID if tiebreaker is completed
+        if tiebreaker.is_completed and tiebreaker.winner_team_id:
+            # No need to change winner_team_id as it still points to the same team
+            # that won, just now they have a different color
+            pass
+    
+    db.commit()
+    
+    # Recalculate tournament statistics after color swap
+    recalculate_tournament_stats(db, match.tournament_id)
+
+    return {"message": "Team colors swapped successfully", "match_id": match_id}
