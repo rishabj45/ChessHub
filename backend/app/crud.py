@@ -170,12 +170,23 @@ def get_match(db: Session, match_id: int) -> Optional[models.Match]:
     return db.query(models.Match).filter(models.Match.id == match_id).first()
 
 def get_matches(db: Session, round_id: Optional[int] = None, tournament_id: Optional[int] = None) -> List[models.Match]:
-    query = db.query(models.Match)
+    from sqlalchemy.orm import joinedload
+    query = db.query(models.Match).options(
+        joinedload(models.Match.games),
+    )
     if round_id:
         query = query.filter(models.Match.round_id == round_id)
     if tournament_id:
         query = query.filter(models.Match.tournament_id == tournament_id)
-    return query.all()
+    
+    matches = query.all()
+    
+    # Manually load tiebreaker data for each match
+    for match in matches:
+        tiebreaker = db.query(models.Tiebreaker).filter(models.Tiebreaker.match_id == match.id).first()
+        match.tiebreaker = tiebreaker
+    
+    return matches
 
 def update_player_stats(db: Session, player_id: int, score: float):
     player = get_player(db, player_id)

@@ -34,9 +34,17 @@ def recalculate_tournament_stats(db: Session, tournament_id: int):
                 else:
                     match.result = "draw"
                 match.is_completed = True
+                
+                # Handle tiebreakers for knockout stage matches
+                # First clean up any unnecessary tiebreakers
+                cleanup_tiebreakers_if_not_needed(db, match.id)
+                # Then create tiebreaker if needed
+                auto_create_tiebreakers_for_match(db, match.id)
             else:
                 match.is_completed = False
                 match.result = None
+                # Clean up tiebreakers for incomplete matches
+                cleanup_tiebreakers_if_not_needed(db, match.id)
         # If match has no games, preserve existing completion status and results
         # This allows for manually set match results to be preserved
 
@@ -62,10 +70,24 @@ def manual_complete_round(db: Session, tournament_id: int, round_number: int) ->
     This allows admins to control when rounds are considered complete,
     even if not all matches have results.
     Also automatically advances tournament stages when appropriate.
+    For knockout stages, ensures all tiebreakers are resolved before advancing.
     """
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         return False
+    
+    # For knockout stages, check tiebreaker requirements BEFORE completing the round
+    if tournament.format == "group_knockout" and is_knockout_stage(tournament, round_number):
+        tiebreaker_check = can_complete_round_with_tiebreakers(db, tournament_id, round_number)
+        if not tiebreaker_check["can_complete"]:
+            print(f"❌ Cannot complete round {round_number}: {tiebreaker_check['reason']}")
+            return False
+    else:
+        # For non-knockout stages, use the basic check
+        basic_check = can_complete_round(db, tournament_id, round_number)
+        if not basic_check["can_complete"]:
+            print(f"❌ Cannot complete round {round_number}: {basic_check['reason']}")
+            return False
     
     # Find the specific round
     round_obj = db.query(Round).filter(
@@ -79,6 +101,9 @@ def manual_complete_round(db: Session, tournament_id: int, round_number: int) ->
     # Mark the round as completed
     round_obj.is_completed = True
     
+    # Finalize any tiebreakers for this round (mark them as completed)
+    finalize_tiebreakers_for_round(db, tournament_id, round_number)
+    
     # Update tournament current round
     completed_rounds = sum(1 for r in tournament.rounds if r.is_completed)
     
@@ -90,6 +115,9 @@ def manual_complete_round(db: Session, tournament_id: int, round_number: int) ->
     
     db.commit()
     print(f"✅ Round {round_number} manually completed for tournament {tournament_id}")
+    
+    # Ensure all changes are flushed before advancement logic
+    db.flush()
     
     # Auto-advance tournament stages if applicable BEFORE recalculating stats
     # This ensures that advancement logic sees the correct match states
@@ -129,8 +157,14 @@ def manual_complete_round(db: Session, tournament_id: int, round_number: int) ->
 def can_complete_round(db: Session, tournament_id: int, round_number: int) -> dict:
     """
     Check if a round can be manually completed and provide status information.
-    Now requires ALL matches in the round to be completed.
+    Now requires ALL matches in the round to be completed AND all tiebreakers resolved.
     """
+    # For knockout stages, use tiebreaker-aware logic
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if tournament and is_knockout_stage(tournament, round_number):
+        return can_complete_round_with_tiebreakers(db, tournament_id, round_number)
+    
+    # For non-knockout stages, use the original logic
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         return {"can_complete": False, "reason": "Tournament not found"}
@@ -791,21 +825,32 @@ def advance_to_final_stage(db: Session, tournament_id: int) -> bool:
     sf1_match = semi_matches[0]  # A1 vs B2
     sf2_match = semi_matches[1]  # A2 vs B1
     
-    # Determine SF1 winner and loser
-    if sf1_match.white_score > sf1_match.black_score:
+    print(f"🔍 SF1 match: {sf1_match.white_team_id} vs {sf1_match.black_team_id}, result={sf1_match.result}")
+    print(f"🔍 SF2 match: {sf2_match.white_team_id} vs {sf2_match.black_team_id}, result={sf2_match.result}")
+    
+    # Determine SF1 winner and loser (use match result, not just scores)
+    if sf1_match.result == "white_win":
         sf1_winner = sf1_match.white_team_id
         sf1_loser = sf1_match.black_team_id
-    else:
+    elif sf1_match.result == "black_win":
         sf1_winner = sf1_match.black_team_id
         sf1_loser = sf1_match.white_team_id
+    else:
+        # This shouldn't happen if tiebreakers are properly resolved
+        print(f"⚠️ SF1 match has no clear winner: {sf1_match.result}")
+        return False
     
-    # Determine SF2 winner and loser
-    if sf2_match.white_score > sf2_match.black_score:
+    # Determine SF2 winner and loser (use match result, not just scores)  
+    if sf2_match.result == "white_win":
         sf2_winner = sf2_match.white_team_id
         sf2_loser = sf2_match.black_team_id
-    else:
+    elif sf2_match.result == "black_win":
         sf2_winner = sf2_match.black_team_id
         sf2_loser = sf2_match.white_team_id
+    else:
+        # This shouldn't happen if tiebreakers are properly resolved
+        print(f"⚠️ SF2 match has no clear winner: {sf2_match.result}")
+        return False
     
     print(f"🏆 Semifinal results: SF1 winner={sf1_winner}, SF1 loser={sf1_loser}, SF2 winner={sf2_winner}, SF2 loser={sf2_loser}")
     
@@ -942,6 +987,11 @@ def complete_tournament(db: Session, tournament_id: int) -> bool:
     if tournament.format == "group_knockout":
         if not can_complete_tournament(db, tournament_id):
             return False
+        
+        # Ensure all tiebreakers for the final round are finalized before completion
+        final_round_number = tournament.total_rounds
+        finalize_tiebreakers_for_round(db, tournament_id, final_round_number)
+        print(f"✅ Finalized tiebreakers for final round {final_round_number} before tournament completion")
     
     tournament.stage = "completed"
     # Set current_round to total_rounds when completed
@@ -1055,7 +1105,16 @@ def _get_semifinal_based_rankings(db: Session, tournament, semi_final_round) -> 
     # Determine winners and losers from semi-finals
     semi_results = []
     for match in semi_matches:
-        if match.white_score > match.black_score:
+        # Use match.result first (includes tiebreaker decisions), fallback to scores
+        if match.result == "white_win":
+            winner_id = match.white_team_id
+            loser_id = match.black_team_id
+            score = f"{match.white_score}-{match.black_score}"
+        elif match.result == "black_win":
+            winner_id = match.black_team_id
+            loser_id = match.white_team_id
+            score = f"{match.black_score}-{match.white_score}"
+        elif match.white_score > match.black_score:
             winner_id = match.white_team_id
             loser_id = match.black_team_id
             score = f"{match.white_score}-{match.black_score}"
@@ -1167,6 +1226,9 @@ def get_final_rankings(db: Session, tournament_id: int) -> Dict[str, Any]:
     group_rounds = teams_per_group - 1 if teams_per_group % 2 == 0 else teams_per_group
     final_phase_round_number = group_rounds + 2  # Both final and 3rd place in same round
     
+    # Ensure all tiebreakers for the final round are resolved before calculating rankings
+    finalize_tiebreakers_for_round(db, tournament_id, final_phase_round_number)
+    
     # Get the final phase round
     final_phase_round = db.query(Round).filter(
         Round.tournament_id == tournament_id,
@@ -1185,37 +1247,154 @@ def get_final_rankings(db: Session, tournament_id: int) -> Dict[str, Any]:
     if len(final_phase_matches) < 2:
         return {}
     
-    # Sort matches by ID to get consistent ordering
-    # The 2nd last match (lower ID) is the final, the last match (higher ID) is 3rd place
-    sorted_matches = sorted(final_phase_matches, key=lambda m: m.id)
+    # Identify final and 3rd place matches properly
+    # The final match will have the semifinal winners
+    # The 3rd place match will have the semifinal losers
+    # We need to identify them based on team composition, not just ID sorting
     
-    if len(sorted_matches) < 2:
+    # Get semifinal results to understand team assignments
+    team_count = len(tournament.teams)
+    teams_per_group = team_count // 2
+    group_rounds = teams_per_group - 1 if teams_per_group % 2 == 0 else teams_per_group
+    semi_final_round_number = group_rounds + 1
+    
+    semi_final_round = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == semi_final_round_number
+    ).first()
+    
+    if not semi_final_round:
         return {}
     
-    final_match = sorted_matches[0]  # 2nd last match (final)
-    third_place_match = sorted_matches[1]  # Last match (3rd place)
+    semi_matches = db.query(Match).filter(
+        Match.round_id == semi_final_round.id,
+        Match.is_completed == True
+    ).all()
     
-    # Determine rankings based on match results
+    if len(semi_matches) != 2:
+        return {}
+    
+    # Determine semifinal winners and losers
+    sf_winners = []
+    sf_losers = []
+    
+    for match in semi_matches:
+        if match.result == "white_win":
+            sf_winners.append(match.white_team_id)
+            sf_losers.append(match.black_team_id)
+        elif match.result == "black_win":
+            sf_winners.append(match.black_team_id)
+            sf_losers.append(match.white_team_id)
+        else:
+            # Handle draw/fallback to scores
+            if match.white_score > match.black_score:
+                sf_winners.append(match.white_team_id)
+                sf_losers.append(match.black_team_id)
+            else:
+                sf_winners.append(match.black_team_id)
+                sf_losers.append(match.white_team_id)
+    
+    # Now identify final vs 3rd place matches based on team composition
+    final_match = None
+    third_place_match = None
+    
+    for match in final_phase_matches:
+        match_teams = {match.white_team_id, match.black_team_id}
+        
+        # Final match: both teams are semifinal winners
+        if match_teams.issubset(set(sf_winners)):
+            final_match = match
+        # 3rd place match: both teams are semifinal losers
+        elif match_teams.issubset(set(sf_losers)):
+            third_place_match = match
+    
+    if not final_match or not third_place_match:
+        # Fallback logic: 2nd last match is final, last match is 3rd place
+        sorted_matches = sorted(final_phase_matches, key=lambda m: m.id)
+        if len(sorted_matches) >= 2:
+            final_match = sorted_matches[-2]  # 2nd last match is final
+            third_place_match = sorted_matches[-1]  # Last match is 3rd place
+        else:
+            # If only one match, use it as final
+            final_match = sorted_matches[0] if sorted_matches else None
+            third_place_match = None
+        print(f"⚠️ Using fallback match identification for tournament {tournament_id}")
+        print(f"   2nd last match (final): {final_match.white_team_id} vs {final_match.black_team_id}" if final_match else "   No final match found")
+        print(f"   Last match (3rd place): {third_place_match.white_team_id} vs {third_place_match.black_team_id}" if third_place_match else "   No 3rd place match found")
+    else:
+        print(f"✅ Correctly identified matches - Final: {final_match.white_team_id} vs {final_match.black_team_id}, 3rd place: {third_place_match.white_team_id} vs {third_place_match.black_team_id}")
+    
+    # Safety check - ensure we have both final and 3rd place matches
+    if not final_match:
+        print(f"❌ No final match found for tournament {tournament_id}")
+        return {}
+    
+    if not third_place_match:
+        print(f"⚠️ No 3rd place match found for tournament {tournament_id}, proceeding with final match only")
+    
+    # Determine rankings based on match results (use result field, not just scores)
     # Champion (1st): Winner of final match
     # Runner-up (2nd): Loser of final match  
     # Third Place (3rd): Winner of 3rd place match
     
-    if final_match.white_score > final_match.black_score:
+    print(f"🔍 Final match result: {final_match.result}, scores: {final_match.white_score}-{final_match.black_score}")
+    if third_place_match:
+        print(f"🔍 3rd place match result: {third_place_match.result}, scores: {third_place_match.white_score}-{third_place_match.black_score}")
+    
+    # Use match.result first (includes tiebreaker decisions), fallback to scores
+    if final_match.result == "white_win":
+        champion_team_id = final_match.white_team_id
+        runner_up_team_id = final_match.black_team_id
+    elif final_match.result == "black_win":
+        champion_team_id = final_match.black_team_id
+        runner_up_team_id = final_match.white_team_id
+    elif final_match.result == "draw":
+        # This shouldn't happen in knockout finals, but handle it
+        print(f"⚠️ Final match is still a draw - this shouldn't happen in knockout stage")
+        if final_match.white_score > final_match.black_score:
+            champion_team_id = final_match.white_team_id
+            runner_up_team_id = final_match.black_team_id
+        else:
+            champion_team_id = final_match.black_team_id
+            runner_up_team_id = final_match.white_team_id
+    elif final_match.white_score > final_match.black_score:
         champion_team_id = final_match.white_team_id
         runner_up_team_id = final_match.black_team_id
     else:
         champion_team_id = final_match.black_team_id
         runner_up_team_id = final_match.white_team_id
     
-    if third_place_match.white_score > third_place_match.black_score:
-        third_place_team_id = third_place_match.white_team_id
-    else:
-        third_place_team_id = third_place_match.black_team_id
+    # Same logic for 3rd place match (if it exists)
+    third_place_team_id = None
+    if third_place_match:
+        if third_place_match.result == "white_win":
+            third_place_team_id = third_place_match.white_team_id
+        elif third_place_match.result == "black_win":
+            third_place_team_id = third_place_match.black_team_id
+        elif third_place_match.result == "draw":
+            # This shouldn't happen in knockout 3rd place, but handle it
+            print(f"⚠️ 3rd place match is still a draw - this shouldn't happen in knockout stage")
+            if third_place_match.white_score > third_place_match.black_score:
+                third_place_team_id = third_place_match.white_team_id
+            else:
+                third_place_team_id = third_place_match.black_team_id
+        elif third_place_match.white_score > third_place_match.black_score:
+            third_place_team_id = third_place_match.white_team_id
+        else:
+            third_place_team_id = third_place_match.black_team_id
     
     # Get team details
     champion_team = db.query(Team).filter(Team.id == champion_team_id).first()
     runner_up_team = db.query(Team).filter(Team.id == runner_up_team_id).first()
-    third_place_team = db.query(Team).filter(Team.id == third_place_team_id).first()
+    third_place_team = db.query(Team).filter(Team.id == third_place_team_id).first() if third_place_team_id else None
+    
+    print(f"🏆 Final rankings determined:")
+    print(f"   Champion: {champion_team.name if champion_team else 'Unknown'} (ID: {champion_team_id})")
+    print(f"   Runner-up: {runner_up_team.name if runner_up_team else 'Unknown'} (ID: {runner_up_team_id})")
+    if third_place_team_id:
+        print(f"   Third Place: {third_place_team.name if third_place_team else 'Unknown'} (ID: {third_place_team_id})")
+    else:
+        print(f"   Third Place: No 3rd place match found")
     
     result = {
         "rankings": [
@@ -1230,25 +1409,37 @@ def get_final_rankings(db: Session, tournament_id: int) -> Dict[str, Any]:
                 "team_id": runner_up_team_id,
                 "team_name": runner_up_team.name if runner_up_team else "Unknown",
                 "title": "Runner-up"
-            },
-            {
-                "position": 3,
-                "team_id": third_place_team_id,
-                "team_name": third_place_team.name if third_place_team else "Unknown",
-                "title": "Third Place"
             }
         ],
         "final_match": {
             "winner": champion_team.name if champion_team else "Unknown",
             "loser": runner_up_team.name if runner_up_team else "Unknown",
             "score": f"{final_match.white_score}-{final_match.black_score}"
-        },
-        "third_place_match": {
+        }
+    }
+    
+    # Add 3rd place to rankings if we have a 3rd place match
+    if third_place_team_id:
+        result["rankings"].append({
+            "position": 3,
+            "team_id": third_place_team_id,
+            "team_name": third_place_team.name if third_place_team else "Unknown",
+            "title": "Third Place"
+        })
+    
+    # Add 3rd place match info only if it exists
+    if third_place_match and third_place_team:
+        result["third_place_match"] = {
             "winner": third_place_team.name if third_place_team else "Unknown",
             "loser": "N/A",  # We don't track the loser of 3rd place match in this simplified version
             "score": f"{third_place_match.white_score}-{third_place_match.black_score}"
         }
-    }
+    else:
+        result["third_place_match"] = {
+            "winner": "N/A",
+            "loser": "N/A",
+            "score": "N/A"
+        }
     
     # Add best player information for group knockout tournaments
     if best_players:
@@ -1309,4 +1500,416 @@ def generate_all_round_robin_rounds(team_ids: List[int]) -> List[List[Tuple[int,
         rounds.append(pairings)
 
     return rounds
+
+
+# ===== TIEBREAKER LOGIC =====
+
+def is_knockout_stage(tournament: Tournament, round_number: int) -> bool:
+    """Check if a round is part of the knockout stage (semi-final or final)"""
+    if tournament.format != "group_knockout":
+        return False
+    
+    team_count = len(tournament.teams)
+    teams_per_group = team_count // 2
+    group_rounds = teams_per_group - 1 if teams_per_group % 2 == 0 else teams_per_group
+    
+    # Knockout stages start after group rounds
+    return round_number > group_rounds
+
+def cleanup_tiebreakers_if_not_needed(db: Session, match_id: int) -> bool:
+    """
+    Clean up tiebreakers if match no longer needs them (e.g., result changed from 2-2 draw).
+    This should be called whenever match results are updated.
+    """
+    from .models import Tiebreaker
+    
+    match = db.query(Match).filter(Match.id == match_id).first()
+    if not match:
+        return False
+    
+    # Check if match still needs tiebreaker (2-2 draw in knockout stage)
+    tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
+    if not tournament:
+        return False
+    
+    needs_tiebreaker = (
+        is_knockout_stage(tournament, match.round_number) and
+        match.is_completed and
+        match.result == "draw" and
+        match.white_score == 2.0 and
+        match.black_score == 2.0
+    )
+    
+    if not needs_tiebreaker:
+        # Remove any existing tiebreaker
+        existing_tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.match_id == match_id).first()
+        if existing_tiebreaker:
+            db.delete(existing_tiebreaker)
+            db.commit()
+            print(f"🗑️ Removed tiebreaker for match {match_id} - no longer needed")
+            return True
+    
+    return False
+
+def auto_create_tiebreakers_for_match(db: Session, match_id: int) -> bool:
+    """
+    Automatically create tiebreaker if match needs one (2-2 draw in knockout stage).
+    This should be called whenever match results are completed/updated.
+    """
+    from .models import Tiebreaker
+    
+    match = db.query(Match).filter(Match.id == match_id).first()
+    if not match:
+        return False
+    
+    tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
+    if not tournament:
+        return False
+    
+    # Check if match needs tiebreaker (2-2 draw in knockout stage)
+    needs_tiebreaker = (
+        is_knockout_stage(tournament, match.round_number) and
+        match.is_completed and
+        match.result == "draw" and
+        match.white_score == 2.0 and
+        match.black_score == 2.0
+    )
+    
+    if needs_tiebreaker:
+        # Check if tiebreaker already exists
+        existing_tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.match_id == match_id).first()
+        if not existing_tiebreaker:
+            # Create new tiebreaker
+            tiebreaker = Tiebreaker(
+                match_id=match_id,
+                white_team_id=match.white_team_id,
+                black_team_id=match.black_team_id,
+                winner_team_id=None,
+                is_completed=False
+            )
+            db.add(tiebreaker)
+            db.commit()
+            print(f"🎯 Created tiebreaker for match {match_id} - 2-2 draw in knockout stage")
+            return True
+    
+    return False
+
+def check_for_tiebreakers_needed(db: Session, tournament_id: int, round_number: int) -> List[int]:
+    """
+    Check if any matches in the given round need tiebreakers.
+    Returns list of match IDs that need tiebreakers (2-2 draws in knockout stages).
+    """
+    from .models import Tiebreaker
+    
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return []
+    
+    # Only check for tiebreakers in knockout stages
+    if not is_knockout_stage(tournament, round_number):
+        return []
+    
+    # Get the round
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        return []
+    
+    matches_needing_tiebreakers = []
+    
+    # Check all matches in this round
+    for match in round_obj.matches:
+        if not match.is_completed:
+            continue
+            
+        # Check for 2-2 draw
+        if match.result == "draw" and match.white_score == 2.0 and match.black_score == 2.0:
+            # Check if tiebreaker already exists
+            existing_tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.match_id == match.id).first()
+            if not existing_tiebreaker:
+                matches_needing_tiebreakers.append(match.id)
+    
+    return matches_needing_tiebreakers
+    """
+    Check if any matches in the given round need tiebreakers.
+    Returns list of match IDs that need tiebreakers (2-2 draws in knockout stages).
+    """
+    from .models import Tiebreaker
+    
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return []
+    
+    # Only check for tiebreakers in knockout stages
+    if not is_knockout_stage(tournament, round_number):
+        return []
+    
+    # Get the round
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        return []
+    
+    matches_needing_tiebreakers = []
+    
+    # Check all matches in this round
+    for match in round_obj.matches:
+        if not match.is_completed:
+            continue
+            
+        # Check for 2-2 draw
+        if match.result == "draw" and match.white_score == 2.0 and match.black_score == 2.0:
+            # Check if tiebreaker already exists
+            existing_tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.match_id == match.id).first()
+            if not existing_tiebreaker:
+                matches_needing_tiebreakers.append(match.id)
+    
+    return matches_needing_tiebreakers
+
+def create_tiebreakers(db: Session, match_ids: List[int]) -> bool:
+    """Create tiebreaker records for the given match IDs"""
+    from .models import Tiebreaker
+    
+    for match_id in match_ids:
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            continue
+            
+        # Create tiebreaker record
+        tiebreaker = Tiebreaker(
+            match_id=match_id,
+            white_team_id=match.white_team_id,
+            black_team_id=match.black_team_id,
+            winner_team_id=None,
+            is_completed=False
+        )
+        db.add(tiebreaker)
+    
+    db.commit()
+    return True
+
+def get_tiebreakers_for_round(db: Session, tournament_id: int, round_number: int) -> List:
+    """Get all tiebreakers for matches in a specific round"""
+    from .models import Tiebreaker
+    
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        return []
+    
+    match_ids = [match.id for match in round_obj.matches]
+    return db.query(Tiebreaker).filter(Tiebreaker.match_id.in_(match_ids)).all()
+
+def complete_tiebreaker(db: Session, tiebreaker_id: int, winner_team_id: int) -> bool:
+    """Complete a tiebreaker by selecting the winning team and updating the match result.
+    If the same winner is selected again, clear the selection (toggle functionality)"""
+    from .models import Tiebreaker
+    
+    tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.id == tiebreaker_id).first()
+    if not tiebreaker:
+        return False
+    
+    # Validate that winner_team_id is one of the teams in the tiebreaker
+    if winner_team_id not in [tiebreaker.white_team_id, tiebreaker.black_team_id]:
+        return False
+    
+    # Check if this winner is already selected (toggle functionality)
+    if tiebreaker.winner_team_id == winner_team_id:
+        # Clear the selection if the same winner is clicked again
+        return clear_tiebreaker_selection(db, tiebreaker_id)
+    
+    # Update the tiebreaker with the selected winner, but don't mark as completed yet
+    # It will only be marked completed when the round is actually completed
+    tiebreaker.winner_team_id = winner_team_id
+    # Don't set is_completed = True here - that happens when round is completed
+    
+    # Update the match result to reflect the tiebreaker winner
+    match = db.query(Match).filter(Match.id == tiebreaker.match_id).first()
+    if match:
+        if winner_team_id == match.white_team_id:
+            # White team wins the tiebreaker
+            match.result = "white_win"
+            # Keep the 2-2 score but mark white as winner
+        else:
+            # Black team wins the tiebreaker  
+            match.result = "black_win"
+            # Keep the 2-2 score but mark black as winner
+        
+        # Match remains completed
+        match.is_completed = True
+    
+    db.commit()
+    return True
+
+def clear_tiebreaker_selection(db: Session, tiebreaker_id: int) -> bool:
+    """Clear the tiebreaker selection and reset match result to draw"""
+    from .models import Tiebreaker
+    
+    tiebreaker = db.query(Tiebreaker).filter(Tiebreaker.id == tiebreaker_id).first()
+    if not tiebreaker:
+        return False
+    
+    # Clear the winner selection
+    tiebreaker.winner_team_id = None
+    
+    # Reset the match result back to draw
+    match = db.query(Match).filter(Match.id == tiebreaker.match_id).first()
+    if match:
+        match.result = "draw"
+        # Match remains completed
+        match.is_completed = True
+    
+    db.commit()
+    return True
+
+def finalize_tiebreakers_for_round(db: Session, tournament_id: int, round_number: int) -> bool:
+    """Mark all tiebreakers in a round as completed when the round is completed
+    and ensure match results reflect tiebreaker winners"""
+    from .models import Tiebreaker
+    
+    tiebreakers = get_tiebreakers_for_round(db, tournament_id, round_number)
+    print(f"🎯 Finalizing {len(tiebreakers)} tiebreakers for round {round_number}")
+    
+    for tiebreaker in tiebreakers:
+        if tiebreaker.winner_team_id is not None:
+            tiebreaker.is_completed = True
+            
+            # Ensure the match result reflects the tiebreaker winner
+            match = db.query(Match).filter(Match.id == tiebreaker.match_id).first()
+            if match:
+                old_result = match.result
+                if tiebreaker.winner_team_id == match.white_team_id:
+                    match.result = "white_win"
+                elif tiebreaker.winner_team_id == match.black_team_id:
+                    match.result = "black_win"
+                match.is_completed = True
+                print(f"   🔄 Updated match {match.id} result from '{old_result}' to '{match.result}' (tiebreaker winner: {tiebreaker.winner_team_id})")
+    
+    db.commit()
+    return True
+
+def all_tiebreakers_completed(db: Session, tournament_id: int, round_number: int) -> bool:
+    """Check if all tiebreakers for a round have winners selected (ready for round completion)"""
+    tiebreakers = get_tiebreakers_for_round(db, tournament_id, round_number)
+    return all(tiebreaker.winner_team_id is not None for tiebreaker in tiebreakers)
+
+def can_complete_round_with_tiebreakers(db: Session, tournament_id: int, round_number: int) -> dict:
+    """
+    Enhanced version of can_complete_round that considers tiebreakers.
+    This should be used instead of the original can_complete_round for knockout stages.
+    """
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return {"can_complete": False, "reason": "Tournament not found"}
+    
+    # Find the specific round
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        return {"can_complete": False, "reason": "Round not found"}
+    
+    if round_obj.is_completed:
+        return {
+            "can_complete": False, 
+            "reason": "Round is already completed",
+            "round_number": round_number,
+            "completion_percentage": 100.0
+        }
+    
+    # Check if this round is the current round or a future round
+    if round_number > tournament.current_round:
+        return {"can_complete": False, "reason": "Cannot complete future rounds"}
+    
+    # Get round matches and their status
+    round_matches = db.query(Match).filter(Match.round_id == round_obj.id).all()
+    completed_matches = [m for m in round_matches if m.is_completed]
+    total_matches = len(round_matches)
+    completed_count = len(completed_matches)
+    
+    # Check for matches without games (placeholder matches)
+    matches_without_games = [m for m in round_matches if not m.games]
+    if matches_without_games:
+        placeholder_teams = []
+        for match in matches_without_games:
+            if match.white_team_id < 0 or match.black_team_id < 0:
+                white_name = get_placeholder_name(match.white_team_id) if match.white_team_id < 0 else f"Team {match.white_team_id}"
+                black_name = get_placeholder_name(match.black_team_id) if match.black_team_id < 0 else f"Team {match.black_team_id}"
+                placeholder_teams.append(f"{white_name} vs {black_name}")
+        
+        if placeholder_teams:
+            return {
+                "can_complete": False,
+                "reason": f"Cannot complete round with placeholder matches: {', '.join(placeholder_teams)}. Tournament stage needs to advance first.",
+                "round_number": round_number,
+                "total_matches": total_matches,
+                "completed_matches": completed_count,
+                "completion_percentage": (completed_count / total_matches * 100) if total_matches > 0 else 0,
+                "missing_matches": total_matches - completed_count,
+                "placeholder_matches": len(matches_without_games)
+            }
+    
+    # Require ALL matches to be completed
+    if completed_count < total_matches:
+        return {
+            "can_complete": False,
+            "reason": f"All matches must be completed. Currently {completed_count}/{total_matches} matches finished.",
+            "round_number": round_number,
+            "total_matches": total_matches,
+            "completed_matches": completed_count,
+            "completion_percentage": (completed_count / total_matches * 100) if total_matches > 0 else 0,
+            "missing_matches": total_matches - completed_count
+        }
+    
+    # Basic completion requirements met, now check for tiebreakers
+    matches_needing_tiebreakers = check_for_tiebreakers_needed(db, tournament_id, round_number)
+    
+    if matches_needing_tiebreakers:
+        # Create tiebreakers if they don't exist
+        create_tiebreakers(db, matches_needing_tiebreakers)
+        return {
+            "can_complete": False,
+            "reason": "Tiebreakers needed for drawn matches",
+            "needs_tiebreakers": True,
+            "tiebreaker_matches": matches_needing_tiebreakers,
+            "round_number": round_number,
+            "total_matches": total_matches,
+            "completed_matches": completed_count,
+            "completion_percentage": 100.0
+        }
+    
+    # Check if existing tiebreakers are completed
+    if not all_tiebreakers_completed(db, tournament_id, round_number):
+        return {
+            "can_complete": False,
+            "reason": "Tiebreakers not yet completed",
+            "needs_tiebreakers": True,
+            "tiebreaker_matches": [],
+            "round_number": round_number,
+            "total_matches": total_matches,
+            "completed_matches": completed_count,
+            "completion_percentage": 100.0
+        }
+    
+    # All good - round can be completed
+    return {
+        "can_complete": True,
+        "needs_tiebreakers": False,
+        "message": "Round ready for completion (all tiebreakers resolved)",
+        "round_number": round_number,
+        "total_matches": total_matches,
+        "completed_matches": completed_count,
+        "completion_percentage": 100.0
+    }
 

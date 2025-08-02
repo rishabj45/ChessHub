@@ -132,15 +132,15 @@ def get_final_rankings(tournament_id: int, db: Session = Depends(get_db)):
 @router.get("/{tournament_id}/rounds/{round_number}/can-complete")
 def can_complete_round(tournament_id: int, round_number: int, db: Session = Depends(get_db)):
     """Check if a specific round can be manually completed."""
-    result = tournament_logic.can_complete_round(db, tournament_id, round_number)
+    result = tournament_logic.can_complete_round_with_tiebreakers(db, tournament_id, round_number)
     return result
 
 @router.post("/{tournament_id}/rounds/{round_number}/complete")
 def complete_round(tournament_id: int, round_number: int, db: Session = Depends(get_db), 
                   _: dict = Depends(get_current_user)):
     """Manually complete a specific round (admin only)."""
-    # First check if the round can be completed
-    check_result = tournament_logic.can_complete_round(db, tournament_id, round_number)
+    # First check if the round can be completed - use tiebreaker-aware logic
+    check_result = tournament_logic.can_complete_round_with_tiebreakers(db, tournament_id, round_number)
     if not check_result["can_complete"]:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, 

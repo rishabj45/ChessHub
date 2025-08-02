@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { apiService } from '@/services/api';
 import MatchResult from './MatchResult';
 import MatchSwapModal from './MatchSwapModal';
+import Tiebreaker from './Tiebreaker';
+import InlineGameResult from './InlineGameResult';
 const Schedule = ({ isAdmin, tournament, onUpdate }) => {
     const [matches, setMatches] = useState([]);
     const [players, setPlayers] = useState([]);
@@ -150,10 +152,14 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
     };
     useEffect(() => {
         const loadData = async () => {
-            if (!tournament)
+            // Always start with loading state
+            setLoading(true);
+            if (!tournament) {
+                // If no tournament, just stop loading - don't try to fetch data
+                setLoading(false);
                 return;
+            }
             try {
-                setLoading(true);
                 const allMatches = [];
                 for (let round = 1; round <= tournament.total_rounds; round++) {
                     const res = await apiService.getMatches(tournament.id, round);
@@ -338,6 +344,9 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
             if (errorMessage.includes('All matches must be completed')) {
                 alert(`❌ Cannot complete round ${roundNumber}:\n\n${errorMessage}\n\nPlease ensure all matches have results before completing the round.`);
             }
+            else if (errorMessage.includes('Tiebreakers needed') || errorMessage.includes('Tiebreakers not yet completed')) {
+                alert(`🎯 Round ${roundNumber} has drawn matches that need tiebreakers!\n\nPlease select the winners of the Armageddon games before completing the round.`);
+            }
             else {
                 alert(`❌ Error: ${errorMessage}`);
             }
@@ -350,6 +359,9 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
         return _jsx("div", { children: "Loading schedule..." });
     if (error)
         return _jsx("div", { className: "text-red-500", children: error });
+    if (!tournament) {
+        return (_jsx("div", { className: "flex items-center justify-center h-64", children: _jsxs("div", { className: "text-center", children: [_jsx("svg", { className: "mx-auto h-16 w-16 text-gray-400 mb-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: _jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 1.5, d: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" }) }), _jsx("h2", { className: "text-xl font-semibold text-gray-600 mb-2", children: "No Tournament Available" }), _jsx("p", { className: "text-gray-500", children: "Please create or select a tournament to view the schedule." })] }) }));
+    }
     return (_jsxs("div", { style: { scrollBehavior: 'auto' }, children: [_jsx("h2", { className: "text-2xl mb-4", children: "Schedule" }), Object.entries(groupedByRound).map(([roundStr, roundMatches]) => {
                 const round = Number(roundStr);
                 const roundTime = roundTimes[round];
@@ -400,14 +412,26 @@ const Schedule = ({ isAdmin, tournament, onUpdate }) => {
                                                 const blackPlayer = getPlayer(game.black_player_id);
                                                 const leftIcon = board === 1 || board === 3 ? '♔' : '♚';
                                                 const rightIcon = board === 1 || board === 3 ? '♚' : '♔';
-                                                return (_jsxs("div", { className: "flex items-center justify-between bg-gray-50 p-2 rounded", children: [_jsxs("div", { className: "flex gap-2 items-center w-1/2", children: [_jsx("span", { children: leftIcon }), _jsx("span", { children: whitePlayer?.name || 'Unknown' })] }), _jsx("div", { className: "text-center text-gray-700 w-20", children: formatScore(game.result) }), _jsxs("div", { className: "flex gap-2 justify-end items-center w-1/2 text-right", children: [_jsx("span", { children: blackPlayer?.name || 'Unknown' }), _jsx("span", { children: rightIcon })] })] }, game.id));
-                                            }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsxs("div", { className: "flex justify-end mt-2 gap-2", children: [_jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedMatchForSwap(match);
-                                                        }, title: "Swap players in this match", children: "Swap Players" }), _jsx("button", { className: "text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700", onClick: (e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedMatch(match);
-                                                        }, children: "Enter Results" })] }))] }))] }, match.id));
+                                                return (_jsxs("div", { className: "flex items-center justify-between bg-gray-50 p-2 rounded", children: [_jsxs("div", { className: "flex gap-2 items-center w-1/2", children: [_jsx("span", { children: leftIcon }), _jsx("span", { children: whitePlayer?.name || 'Unknown' })] }), _jsx(InlineGameResult, { game: game, matchId: match.id, isAdmin: isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round, whitePlayerName: whitePlayer?.name || 'Unknown', blackPlayerName: blackPlayer?.name || 'Unknown', onResultUpdate: () => {
+                                                                preserveScrollPosition(() => {
+                                                                    refreshMatchData();
+                                                                });
+                                                                if (tournament && round === tournament.current_round) {
+                                                                    checkRoundCompletionStatus(round);
+                                                                }
+                                                            } }), _jsxs("div", { className: "flex gap-2 justify-end items-center w-1/2 text-right", children: [_jsx("span", { children: blackPlayer?.name || 'Unknown' }), _jsx("span", { children: rightIcon })] })] }, game.id));
+                                            }), isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (_jsx("div", { className: "flex justify-end mt-2 gap-2", children: _jsx("button", { className: "text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600", onClick: (e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedMatchForSwap(match);
+                                                    }, title: "Swap players in this match", children: "Swap Players" }) })), match.tiebreaker && (_jsx(Tiebreaker, { tiebreaker: match.tiebreaker, whiteTeamName: getTeamName(match.white_team_id), blackTeamName: getTeamName(match.black_team_id), isAdmin: isAdmin, onTiebreakerComplete: () => {
+                                                    // Refresh match data and round completion status
+                                                    preserveScrollPosition(() => {
+                                                        refreshMatchData();
+                                                    });
+                                                    if (tournament && round === tournament.current_round) {
+                                                        checkRoundCompletionStatus(round);
+                                                    }
+                                                } }))] }))] }, match.id));
                         })] }, round));
             }), selectedMatch && (_jsx(MatchResult, { match: selectedMatch, players: players, onClose: () => {
                     setSelectedMatch(null);

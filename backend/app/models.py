@@ -115,3 +115,19 @@ class Game(Base):
     match = relationship("Match", back_populates="games")
     white_player = relationship("Player", foreign_keys=[white_player_id])
     black_player = relationship("Player", foreign_keys=[black_player_id])
+
+class Tiebreaker(Base):
+    __tablename__ = "tiebreakers"
+    id = Column(Integer, primary_key=True, index=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    white_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    black_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    winner_team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    is_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    match = relationship("Match")
+    white_team = relationship("Team", foreign_keys=[white_team_id])
+    black_team = relationship("Team", foreign_keys=[black_team_id])
+    winner_team = relationship("Team", foreign_keys=[winner_team_id])

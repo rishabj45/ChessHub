@@ -4,7 +4,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 import os, logging
 from .database import engine, Base
-from .api import tournaments, teams, players, matches,auth
+from .api import tournaments, teams, players, matches, auth, tiebreakers
 from dotenv import load_dotenv; load_dotenv()
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -50,6 +50,7 @@ app.include_router(tournaments.router)
 app.include_router(teams.router)
 app.include_router(players.router)
 app.include_router(matches.router)
+app.include_router(tiebreakers.router)
 
 # At bottom of main.py, after routers:
 frontend_path = os.path.join(os.path.dirname(__file__), "../../frontend/dist")

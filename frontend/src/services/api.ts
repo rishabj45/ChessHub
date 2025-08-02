@@ -222,6 +222,28 @@ async updateTournamentAnnouncement(tournamentId: number, announcement: string): 
     throw error;
   }
 }
+
+// -- Tiebreakers --
+async getTiebreakersForRound(tournamentId: number, roundNumber: number): Promise<any[]> {
+  const res = await this.client.get(`/tiebreakers/round/${tournamentId}/${roundNumber}`);
+  return res.data;
+}
+
+async selectTiebreakerWinner(tiebreakerId: number, winnerTeamId: number): Promise<{ message: string }> {
+  const res = await this.client.post(`/tiebreakers/${tiebreakerId}/select-winner`, {
+    winner_team_id: winnerTeamId
+  });
+  return res.data;
+}
+
+async checkTiebreakersNeeded(tournamentId: number, roundNumber: number): Promise<{
+  needs_tiebreakers: boolean;
+  tiebreaker_matches: number[];
+  all_tiebreakers_completed: boolean;
+}> {
+  const res = await this.client.get(`/tiebreakers/check/${tournamentId}/${roundNumber}`);
+  return res.data;
+}
 }
 
 export const apiService = new ApiService();

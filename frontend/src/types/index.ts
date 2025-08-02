@@ -107,6 +107,16 @@ export interface MatchResponse {
   scheduled_date: string;
   is_completed: boolean;
   games: GameResponse[];
+  tiebreaker?: TiebreakerResponse;
+}
+
+export interface TiebreakerResponse {
+  id: number;
+  match_id: number;
+  white_team_id: number;
+  black_team_id: number;
+  winner_team_id?: number;
+  is_completed: boolean;
 }
 
 export interface StandingsEntry {

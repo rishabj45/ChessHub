@@ -57,7 +57,15 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
     <div>
       <h2 className="text-2xl mb-4">Teams</h2>
 
-      {teams.length === 0 ? (
+      {!tournament ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Users className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-600 mb-2">No Tournament Available</h2>
+            <p className="text-gray-500">Please create or select a tournament to view teams.</p>
+          </div>
+        </div>
+      ) : teams.length === 0 ? (
         <p>No teams found for this tournament.</p>
       ) : (
         <ul className="mt-4 space-y-4">

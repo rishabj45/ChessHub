@@ -163,5 +163,20 @@ class ApiService {
             throw error;
         }
     }
+    // -- Tiebreakers --
+    async getTiebreakersForRound(tournamentId, roundNumber) {
+        const res = await this.client.get(`/tiebreakers/round/${tournamentId}/${roundNumber}`);
+        return res.data;
+    }
+    async selectTiebreakerWinner(tiebreakerId, winnerTeamId) {
+        const res = await this.client.post(`/tiebreakers/${tiebreakerId}/select-winner`, {
+            winner_team_id: winnerTeamId
+        });
+        return res.data;
+    }
+    async checkTiebreakersNeeded(tournamentId, roundNumber) {
+        const res = await this.client.get(`/tiebreakers/check/${tournamentId}/${roundNumber}`);
+        return res.data;
+    }
 }
 export const apiService = new ApiService();

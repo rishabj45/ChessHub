@@ -117,6 +117,15 @@ class GameSimpleResultUpdate(BaseModel):
             raise ValueError(f"result must be one of {allowed}")
         return v
 
+class TiebreakerResponse(BaseModel):
+    id: int
+    match_id: int
+    white_team_id: int
+    black_team_id: int
+    winner_team_id: Optional[int]
+    is_completed: bool
+    class Config:
+        from_attributes = True
 
 class RoundResponse(BaseModel):
     round_number: int
@@ -134,6 +143,7 @@ class MatchResponse(BaseModel):
     scheduled_date: Optional[datetime]
     is_completed: bool
     games: List[GameResponse]
+    tiebreaker: Optional[TiebreakerResponse] = None
     class Config:
         from_attributes = True
 
@@ -182,3 +192,16 @@ class TeamSwapData(BaseModel):
 class MatchSwapRequest(BaseModel):
     white_team_swaps: List[TeamSwapData] = []
     black_team_swaps: List[TeamSwapData] = []
+
+class TiebreakerResponse(BaseModel):
+    id: int
+    match_id: int
+    white_team_id: int
+    black_team_id: int
+    winner_team_id: Optional[int]
+    is_completed: bool
+    class Config:
+        from_attributes = True
+
+class TiebreakerSelectWinnerRequest(BaseModel):
+    winner_team_id: int

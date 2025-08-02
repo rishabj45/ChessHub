@@ -3,6 +3,8 @@ import { apiService } from '@/services/api';
 import { MatchResponse, Player, Team, Tournament, GameResponse } from '@/types';
 import MatchResult from './MatchResult';
 import MatchSwapModal from './MatchSwapModal';
+import Tiebreaker from './Tiebreaker';
+import InlineGameResult from './InlineGameResult';
 
 interface ScheduleProps {
   isAdmin: boolean;
@@ -169,10 +171,16 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
 
   useEffect(() => {
     const loadData = async () => {
-      if (!tournament) return;
+      // Always start with loading state
+      setLoading(true);
+      
+      if (!tournament) {
+        // If no tournament, just stop loading - don't try to fetch data
+        setLoading(false);
+        return;
+      }
 
       try {
-        setLoading(true);
         const allMatches: MatchResponse[] = [];
 
         for (let round = 1; round <= tournament.total_rounds; round++) {
@@ -379,6 +387,8 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
       const errorMessage = error.response?.data?.detail || 'Failed to complete round';
       if (errorMessage.includes('All matches must be completed')) {
         alert(`❌ Cannot complete round ${roundNumber}:\n\n${errorMessage}\n\nPlease ensure all matches have results before completing the round.`);
+      } else if (errorMessage.includes('Tiebreakers needed') || errorMessage.includes('Tiebreakers not yet completed')) {
+        alert(`🎯 Round ${roundNumber} has drawn matches that need tiebreakers!\n\nPlease select the winners of the Armageddon games before completing the round.`);
       } else {
         alert(`❌ Error: ${errorMessage}`);
       }
@@ -389,6 +399,20 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
 
   if (loading) return <div>Loading schedule...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
+
+  if (!tournament) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">No Tournament Available</h2>
+          <p className="text-gray-500">Please create or select a tournament to view the schedule.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ scrollBehavior: 'auto' }}>
@@ -513,9 +537,21 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                               <span>{leftIcon}</span>
                               <span>{whitePlayer?.name || 'Unknown'}</span>
                             </div>
-                            <div className="text-center text-gray-700 w-20">
-                              {formatScore(game.result)}
-                            </div>
+                            <InlineGameResult
+                              game={game}
+                              matchId={match.id}
+                              isAdmin={isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round}
+                              whitePlayerName={whitePlayer?.name || 'Unknown'}
+                              blackPlayerName={blackPlayer?.name || 'Unknown'}
+                              onResultUpdate={() => {
+                                preserveScrollPosition(() => {
+                                  refreshMatchData();
+                                });
+                                if (tournament && round === tournament.current_round) {
+                                  checkRoundCompletionStatus(round);
+                                }
+                              }}
+                            />
                             <div className="flex gap-2 justify-end items-center w-1/2 text-right">
                               <span>{blackPlayer?.name || 'Unknown'}</span>
                               <span>{rightIcon}</span>
@@ -524,7 +560,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                         );
                       })}
 
-                      {/* Match-level controls - only show for current round and not completed tournaments */}
+                      {/* Match-level controls - always show for current round and not completed tournaments */}
                       {isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (
                         <div className="flex justify-end mt-2 gap-2">
                           <button
@@ -537,16 +573,26 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                           >
                             Swap Players
                           </button>
-                          <button
-                            className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMatch(match);
-                            }}
-                          >
-                            Enter Results
-                          </button>
                         </div>
+                      )}
+
+                      {/* Tiebreaker Component - show to all users, but only admins can interact */}
+                      {match.tiebreaker && (
+                        <Tiebreaker
+                          tiebreaker={match.tiebreaker}
+                          whiteTeamName={getTeamName(match.white_team_id)}
+                          blackTeamName={getTeamName(match.black_team_id)}
+                          isAdmin={isAdmin}
+                          onTiebreakerComplete={() => {
+                            // Refresh match data and round completion status
+                            preserveScrollPosition(() => {
+                              refreshMatchData();
+                            });
+                            if (tournament && round === tournament.current_round) {
+                              checkRoundCompletionStatus(round);
+                            }
+                          }}
+                        />
                       )}
                     </div>
                   )}
