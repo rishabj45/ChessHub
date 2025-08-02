@@ -11,9 +11,17 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    
+    // 💡 Add these:
+    "outDir": "dist",     // All .js goes here
+    "rootDir": "src",     // Source lives here
+    "noEmit": false       // Ensure compiler outputs files
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
 }
