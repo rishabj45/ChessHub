@@ -1,21 +1,22 @@
 # === Python / Flask Backend ===
-backend/__pycache__/
-backend/*.py[cod]
-# backend/chess_tournament.db
-backend/chess_tournament.log
-backend/.env
-backend/.pytest_cache/
-backend/venv/
-backend/.venv/
-backend/*.egg-info/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.pyc
+/backend/chess_tournament.db
+chess_tournament.log
+.env
+.pytest_cache/
+venv/
+.venv/
+*.egg-info/
 
 # Alembic migration cache (optional)
 backend/alembic/versions/*.pyc
 
 # === Python Test Artifacts ===
-.pytest_cache/
-.env
 future_features.txt
+
 # === Node / React Frontend ===
 frontend/node_modules/
 frontend/build/
@@ -36,7 +37,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # === Environment and Config Files ===
-.env
 .env.*
 
 # === System and Editor ===

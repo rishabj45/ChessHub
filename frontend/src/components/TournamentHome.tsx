@@ -44,6 +44,12 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
           }
         }
 
+        // Get final rankings if tournament is completed (for everyone)
+        if (tournament.stage === 'completed') {
+          const rankings = await apiService.getFinalRankings(tournament.id);
+          setFinalRankings(rankings);
+        }
+
         // Admin-only data loading
         if (isAdmin) {
           if (tournament.format === 'group_knockout') {
@@ -55,12 +61,6 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
               const completeData = await apiService.canCompleteTournament(tournament.id);
               setCanComplete(completeData.can_complete);
             }
-          }
-
-          // Get final rankings if tournament is completed
-          if (tournament.stage === 'completed') {
-            const rankings = await apiService.getFinalRankings(tournament.id);
-            setFinalRankings(rankings);
           }
         }
       } catch (error) {
