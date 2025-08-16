@@ -29,12 +29,8 @@ target_metadata = models.Base.metadata
 # ... etc.
 
 def get_database_url():
-    # first try env var
-    raw = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
-    # if it's async sqlite, downgrade to sync:
-    if raw.startswith("sqlite+aiosqlite://"):
-        return raw.replace("sqlite+aiosqlite://", "sqlite:///")
-    return raw
+    # Get database URL from environment variable or config
+    return os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -53,7 +49,6 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-         render_as_batch=True, 
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
@@ -84,7 +79,6 @@ def run_migrations_online() -> None:
             connection=connection, 
             target_metadata=target_metadata,
             compare_type=True,
-            render_as_batch=True, 
             compare_server_default=True,
         )
 
