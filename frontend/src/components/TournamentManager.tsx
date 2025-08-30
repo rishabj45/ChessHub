@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trophy, Calendar, Play, Trash2, Crown, MapPin } from 'lucide-react';
+import { Plus, Trophy, Calendar, Play, Trash2,MapPin } from 'lucide-react';
 import TournamentCreator from './TournamentCreator';
 import { apiService } from '@/services/api';
-import { Tournament } from '@/types';
+import { Tournament, TabType } from '@/types';
 import { getFormatDisplayText, getStageDisplayText } from '@/utils/helpers';
 
 interface TournamentManagerProps {
   isAdmin: boolean;
   currentTournament: Tournament | null;
-  onTournamentChanged: () => void;
+  onTournamentChanged: (shouldChangeTab?: boolean) => void;
+  onTournamentCreated: () => void;
+  onTabChange: (tab: TabType) => void;
 }
 
 const TournamentManager: React.FC<TournamentManagerProps> = ({ 
   isAdmin, 
   currentTournament, 
-  onTournamentChanged 
+  onTournamentChanged,
+  onTournamentCreated,
+  onTabChange
 }) => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [showCreator, setShowCreator] = useState(false);
@@ -23,9 +27,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
   const [settingCurrent, setSettingCurrent] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
-  
-  // State for completing tournaments
-  const [completing, setCompleting] = useState<number | null>(null);
+  const [starting, setStarting] = useState<number | null>(null);
 
   useEffect(() => {
     loadTournaments();
@@ -55,7 +57,15 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
       setSettingCurrent(tournament.id);
       await apiService.setCurrentTournament(tournament.id);
       await loadTournaments(); // Refresh the tournament list
-      await onTournamentChanged(); // Refresh the current tournament in the app
+      await onTournamentChanged(false); // Don't let App component handle tab change
+      
+      // Set the appropriate tab based on tournament status
+      if (tournament.stage !== 'not_yet_started') {
+        onTabChange('schedule');
+      } else {
+        onTabChange('teams');
+      }
+      
       setError(null);
     } catch (err: any) {
       console.error('Error setting current tournament:', err);
@@ -84,7 +94,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
       setShowDeleteConfirm(null);
       await apiService.deleteTournament(tournamentId);
       await loadTournaments(); // Refresh the tournament list
-      await onTournamentChanged(); // Refresh the current tournament in the app
+      await onTournamentChanged(false); // Don't change tab on deletion
       setError(null);
     } catch (err: any) {
       console.error('Error deleting tournament:', err);
@@ -97,30 +107,14 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
   const handleTournamentCreated = async () => {
     setShowCreator(false);
     await loadTournaments();
-    await onTournamentChanged();
-  };
-
-  const handleCompleteTournament = async (tournamentId: number) => {
-    setCompleting(tournamentId);
-    try {
-      await apiService.completeTournament(tournamentId);
-      await loadTournaments();
-      await onTournamentChanged();
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'Failed to complete tournament';
-      alert(`❌ Error: ${errorMessage}`);
-    } finally {
-      setCompleting(null);
-    }
+    await onTournamentCreated(); // Call the new handler that switches to teams tab
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
   };
 
@@ -130,7 +124,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-800 flex items-center">
             <Trophy className="mr-2 text-yellow-500" />
-            Create New Tournament
+            Tournaments
           </h2>
           <button
             onClick={() => setShowCreator(false)}
@@ -179,7 +173,6 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
         <div className="text-center py-12">
           <Trophy className="mx-auto text-6xl text-gray-400 mb-4" />
           <h3 className="text-xl font-semibold text-gray-600 mb-2">No Tournaments Found</h3>
-          <p className="text-gray-500 mb-4">Get started by creating your first tournament.</p>
           {isAdmin && (
             <button
               onClick={() => setShowCreator(true)}
@@ -208,7 +201,6 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                     </h3>
                     {currentTournament?.id === tournament.id && (
                       <div className="flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
-                        <Crown className="w-3 h-3 mr-1" />
                         Current
                       </div>
                     )}
@@ -263,31 +255,36 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
                 </div>
 
                 {isAdmin && (
-                  <div className="ml-4 flex flex-col space-y-2">
-                    {currentTournament?.id !== tournament.id && (
-                      <button
-                        onClick={() => handleSetCurrent(tournament)}
-                        disabled={settingCurrent === tournament.id || deleting === tournament.id}
-                        className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {settingCurrent === tournament.id ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            <span>Setting...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4" />
-                            <span>Set as Current</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                    
+                  <div className="ml-4 w-40 flex flex-col space-y-2 items-stretch">
+                    {/* keep a placeholder button (invisible) when tournament is current to preserve layout */}
+                    <button
+                      onClick={() => handleSetCurrent(tournament)}
+                      disabled={
+                        currentTournament?.id === tournament.id ||
+                        settingCurrent === tournament.id ||
+                        deleting === tournament.id
+                      }
+                      className={`flex items-center justify-center space-x-2 w-full h-10 px-3 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 ${
+                        currentTournament?.id === tournament.id ? 'invisible' : ''
+                      }`}
+                    >
+                      {settingCurrent === tournament.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Setting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          <span>Set as Current</span>
+                        </>
+                      )}
+                    </button>
+
                     <button
                       onClick={() => handleDeleteConfirm(tournament.id)}
                       disabled={settingCurrent === tournament.id || deleting === tournament.id}
-                      className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                      className="flex items-center justify-center space-x-2 w-full h-10 px-3 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                     >
                       {deleting === tournament.id ? (
                         <>
@@ -317,7 +314,7 @@ const TournamentManager: React.FC<TournamentManagerProps> = ({
               Confirm Delete Tournament
             </h3>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this tournament? This action cannot be undone and will remove all associated data including teams, players, matches, and games.
+              Are you sure you want to delete this tournament?
             </p>
             <div className="flex space-x-3">
               <button

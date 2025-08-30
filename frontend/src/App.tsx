@@ -12,11 +12,11 @@ import { apiService as api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 
 const App: React.FC = () => {
-  // Initialize activeTab from localStorage, fallback to 'home'
+  // Initialize activeTab from localStorage, fallback to 'schedule'
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const savedTab = localStorage.getItem('chesshub-active-tab');
     const validTabs: TabType[] = ['home', 'teams', 'schedule', 'standings', 'bestPlayers', 'tournaments'];
-    return (savedTab && validTabs.includes(savedTab as TabType)) ? (savedTab as TabType) : 'home';
+    return (savedTab && validTabs.includes(savedTab as TabType)) ? (savedTab as TabType) : 'schedule';
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -55,14 +55,25 @@ const App: React.FC = () => {
     fetchTournament();
   }, []);
 
-  const handleTournamentUpdate = async () => {
+  const handleTournamentUpdate = async (shouldChangeTab = false) => {
     try {
       const response = await api.getCurrentTournament();
       setTournament(response);
-      // Auto-switch to home tab after tournament creation/update
-      if (activeTab === 'tournaments') {
+      // Auto-switch to specified tab only if requested
+      if (shouldChangeTab && activeTab === 'tournaments') {
         handleTabChange('home');
       }
+    } catch (err) {
+      console.error('Error refreshing tournament:', err);
+    }
+  };
+
+  const handleTournamentCreated = async () => {
+    try {
+      const response = await api.getCurrentTournament();
+      setTournament(response);
+      // On tournament creation, switch to teams tab
+      handleTabChange('teams');
     } catch (err) {
       console.error('Error refreshing tournament:', err);
     }
@@ -116,11 +127,17 @@ const App: React.FC = () => {
       case 'standings':
         return <Standings isAdmin={isAuthenticated && adminMode} onUpdate={handleTournamentUpdate} />;
       case 'teams':
-        return <Teams isAdmin={isAuthenticated && adminMode} tournament={tournament} />;
+        return <Teams isAdmin={isAuthenticated && adminMode} tournament={tournament} onUpdate={handleTournamentUpdate} onTabChange={handleTabChange} />;
       case 'bestPlayers':
         return <BestPlayers  />;
       case 'tournaments':
-        return <TournamentManager isAdmin={isAuthenticated && adminMode} currentTournament={tournament} onTournamentChanged={handleTournamentUpdate} />;
+        return <TournamentManager 
+          isAdmin={isAuthenticated && adminMode} 
+          currentTournament={tournament} 
+          onTournamentChanged={handleTournamentUpdate}
+          onTournamentCreated={handleTournamentCreated}
+          onTabChange={handleTabChange}
+        />;
       default:
         return null;
     }

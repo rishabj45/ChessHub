@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, Minus, Calendar, Trophy, Users, Info } from 'lucide-react';
+import { Calendar, Trophy, Users } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { TournamentFormat } from '@/types';
 
 interface TournamentCreatorProps {
   isAdmin: boolean;
   onTournamentCreated: () => void;
-}
-
-interface TeamSetup {
-  name: string;
-  playerCount: number;
 }
 
 interface TournamentFormData {
@@ -20,7 +15,7 @@ interface TournamentFormData {
   startDate: string;
   endDate: string;
   format: TournamentFormat;
-  teams: TeamSetup[];
+  numberOfTeams: number;
 }
 
 const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTournamentCreated }) => {
@@ -31,67 +26,27 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
     startDate: '',
     endDate: '',
     format: 'round_robin',
-    teams: [
-      { name: 'Team 1', playerCount: 4 },
-      { name: 'Team 2', playerCount: 4 },
-      { name: 'Team 3', playerCount: 4 },
-      { name: 'Team 4', playerCount: 4 },
-    ],
+    numberOfTeams: 4,
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleInputChange = (field: keyof Omit<TournamentFormData, 'teams'>, value: string) => {
+  const handleInputChange = (field: keyof TournamentFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError(null);
     setSuccess(null);
   };
 
-  const handleTeamChange = (index: number, field: keyof TeamSetup, value: string | number) => {
-    setFormData(prev => ({
-      ...prev,
-      teams: prev.teams.map((team, i) => 
-        i === index ? { ...team, [field]: value } : team
-      ),
-    }));
-    setError(null);
-    setSuccess(null);
-  };
-
-  const addTeam = () => {
-    setFormData(prev => ({
-      ...prev,
-      teams: [...prev.teams, { name: `Team ${prev.teams.length + 1}`, playerCount: 4 }],
-    }));
-  };
-
-  const removeTeam = (index: number) => {
-    if (formData.teams.length <= 2) {
-      setError('Minimum 2 teams required');
-      return;
-    }
-    setFormData(prev => ({
-      ...prev,
-      teams: prev.teams.filter((_, i) => i !== index),
-    }));
+  const generateTeamNames = (count: number): string[] => {
+    return Array.from({ length: count }, (_, i) => `Team ${i + 1}`);
   };
 
   const validateForm = (): string | null => {
     if (!formData.name.trim()) return 'Tournament name is required';
-    if (formData.teams.length < 2) return 'At least 2 teams are required';
-    
-    for (let i = 0; i < formData.teams.length; i++) {
-      const team = formData.teams[i];
-      if (!team.name.trim()) return `Team ${i + 1} name is required`;
-      if (team.playerCount < 1 || team.playerCount > 8) return `Team ${i + 1} must have 1-8 players`;
-    }
-
-    // Check for duplicate team names
-    const teamNames = formData.teams.map(t => t.name.trim().toLowerCase());
-    const uniqueNames = new Set(teamNames);
-    if (teamNames.length !== uniqueNames.size) return 'Team names must be unique';
+    if (formData.numberOfTeams < 2) return 'At least 2 teams are required';
+    if (formData.numberOfTeams > 32) return 'Maximum 32 teams allowed';
 
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
       return 'End date must be after start date';
@@ -99,53 +54,15 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
 
     // Format-specific validation
     if (formData.format === 'group_knockout') {
-      if (formData.teams.length < 4) {
+      if (formData.numberOfTeams < 4) {
         return 'Group + Knockout format requires at least 4 teams';
       }
-      if (formData.teams.length % 2 !== 0) {
+      if (formData.numberOfTeams % 2 !== 0) {
         return 'Group + Knockout format requires an even number of teams';
       }
     }
 
     return null;
-  };
-
-  const calculateRounds = () => {
-    const numTeams = formData.teams.length;
-    if (numTeams < 2) return 0;
-    
-    if (formData.format === 'round_robin') {
-      // Round-robin: each team plays every other team once
-      // For odd number of teams, we need n rounds
-      // For even number of teams, we need n-1 rounds
-      return numTeams % 2 === 0 ? numTeams - 1 : numTeams;
-    } else if (formData.format === 'group_knockout') {
-      // Group stage rounds + knockout rounds
-      const teamsPerGroup = Math.floor(numTeams / 2);
-      const groupRounds = teamsPerGroup % 2 === 0 ? teamsPerGroup - 1 : teamsPerGroup;
-      const knockoutRounds = 2; // Semi-finals, Final (with 3rd place in same round)
-      return groupRounds + knockoutRounds;
-    }
-    
-    return 0;
-  };
-
-  const calculateMatches = () => {
-    const numTeams = formData.teams.length;
-    if (numTeams < 2) return 0;
-    
-    if (formData.format === 'round_robin') {
-      // Total matches in round-robin = n * (n-1) / 2
-      return (numTeams * (numTeams - 1)) / 2;
-    } else if (formData.format === 'group_knockout') {
-      // Group stage matches + knockout matches
-      const teamsPerGroup = Math.floor(numTeams / 2);
-      const groupMatches = 2 * (teamsPerGroup * (teamsPerGroup - 1)) / 2; // 2 groups
-      const knockoutMatches = 4; // 2 semi-finals + final + 3rd place (final & 3rd in same round)
-      return groupMatches + knockoutMatches;
-    }
-    
-    return 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,14 +84,15 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
     setSuccess(null);
 
     try {
+      const teamNames = generateTeamNames(formData.numberOfTeams);
+
       const tournamentData = {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
         venue: formData.venue.trim() || null,
         start_date: formData.startDate ? new Date(formData.startDate).toISOString() : null,
         end_date: formData.endDate ? new Date(formData.endDate).toISOString() : null,
-        team_names: formData.teams.map(t => t.name.trim()),
-        players_per_team: formData.teams.map(t => t.playerCount),
+        team_names: teamNames,
         format: formData.format,
       };
 
@@ -200,12 +118,7 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
         startDate: '',
         endDate: '',
         format: 'round_robin',
-        teams: [
-          { name: 'Team 1', playerCount: 4 },
-          { name: 'Team 2', playerCount: 4 },
-          { name: 'Team 3', playerCount: 4 },
-          { name: 'Team 4', playerCount: 4 },
-        ],
+        numberOfTeams: 4,
       });
     } catch (err: any) {
       console.error('Error creating tournament:', err);
@@ -301,7 +214,7 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
                 Start Date
               </label>
               <input
-                type="datetime-local"
+                type="date"
                 value={formData.startDate}
                 onChange={(e) => handleInputChange('startDate', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -315,7 +228,7 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
                 End Date
               </label>
               <input
-                type="datetime-local"
+                type="date"
                 value={formData.endDate}
                 onChange={(e) => handleInputChange('endDate', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -341,83 +254,22 @@ const TournamentCreator: React.FC<TournamentCreatorProps> = ({ isAdmin, onTourna
             </select>
           </div>
 
-          {/* Tournament Statistics */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
-              <Info className="w-5 h-5 mr-2 text-blue-500" />
-              Tournament Statistics
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{formData.teams.length}</div>
-                <div className="text-gray-600">Teams</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{calculateRounds()}</div>
-                <div className="text-gray-600">Rounds</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{calculateMatches()}</div>
-                <div className="text-gray-600">Total Matches</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Number of Teams *
+                </label>
+                <input
+                  type="number"
+                  min="2"
+                  max="32"
+                  value={formData.numberOfTeams}
+                  onChange={(e) => handleInputChange('numberOfTeams', parseInt(e.target.value) || 2)}
+                  className="w-20 text-center px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                />
               </div>
             </div>
-          </div>
-
-          {/* Teams Setup */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                <Users className="w-5 h-5 mr-2 text-blue-500" />
-                Teams Setup
-              </h3>
-              <button
-                type="button"
-                onClick={addTeam}
-                className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                disabled={isLoading}
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Team</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {formData.teams.map((team, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={team.name}
-                      onChange={(e) => handleTeamChange(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder={`Team ${index + 1} name`}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="w-32">
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      value={team.playerCount}
-                      onChange={(e) => handleTeamChange(index, 'playerCount', parseInt(e.target.value) || 4)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeTeam(index)}
-                    className="p-2 text-red-600 hover:text-red-800 disabled:opacity-50"
-                    disabled={isLoading || formData.teams.length <= 2}
-                    title="Remove team"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Submit Button */}
           <div className="flex justify-end space-x-3">

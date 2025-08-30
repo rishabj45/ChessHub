@@ -2,25 +2,56 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy } from 'lucide-react';
 import { apiService } from '@/services/api';
-import { BestPlayerEntry } from '@/types';
+import { BestPlayerEntry, Tournament } from '@/types';
 
 const BestPlayers: React.FC = () => {
   const [players, setPlayers] = useState<BestPlayerEntry[]>([]);
+  const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiService.getBestPlayers().then(data => setPlayers(data.players));
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const currentTournament = await apiService.getCurrentTournament();
+        setTournament(currentTournament);
+        
+        if (currentTournament) {
+          const data = await apiService.getBestPlayers(currentTournament.id);
+          setPlayers(data.players);
+        }
+      } catch (error) {
+        console.error('Error loading best players:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   return (
     <div>
       <h2 className="text-2xl mb-4">Best Players</h2>
       
-      {players.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      ) : !tournament ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Trophy className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-600 mb-2">No Tournament Available</h2>
+            <p className="text-gray-500">Please create or select a tournament to view player statistics.</p>
+          </div>
+        </div>
+      ) : players.length === 0 ? (
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <Trophy className="mx-auto h-16 w-16 text-gray-400 mb-4" />
             <h2 className="text-xl font-semibold text-gray-600 mb-2">No Player Data Available</h2>
-            <p className="text-gray-500">Player statistics will appear here once tournaments are completed.</p>
+            <p className="text-gray-500">Player statistics will appear here once games are played.</p>
           </div>
         </div>
       ) : (

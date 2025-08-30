@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { apiService } from '@/services/api';
-import { MatchResponse, Player, Team, Tournament, GameResponse } from '@/types';
-import MatchResult from './MatchResult';
+import { Calendar, Clock, CheckCircle, AlertCircle, Users, RotateCcw, Crown, Trophy, Medal, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
+import { apiService } from '../services/api';
+import { MatchResponse, Player, Team, Tournament} from '../types';
 import MatchSwapModal from './MatchSwapModal';
-import Tiebreaker from './Tiebreaker';
 import InlineGameResult from './InlineGameResult';
 
 interface ScheduleProps {
@@ -12,12 +11,112 @@ interface ScheduleProps {
   onUpdate: () => void;
 }
 
+interface TiebreakerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onResolve: (firstTeamId: number, secondTeamId: number) => void;
+  teams: { id: number; name: string }[];
+  tieGroup: { position: number; teams: { id: number; name: string }[] };
+}
+
+interface TieData {
+  has_ties: boolean;
+  ties: Record<string, number[]>;
+}
+
+interface RoundCompletionStatus {
+  can_complete: boolean;
+  unfinished_matches: number;
+  total_matches: number;
+}
+
+const TiebreakerModal: React.FC<TiebreakerModalProps> = ({ isOpen, onClose, onResolve, teams, tieGroup }) => {
+  const [firstTeam, setFirstTeam] = useState<number | null>(null);
+  const [secondTeam, setSecondTeam] = useState<number | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleResolve = () => {
+    if (firstTeam !== null && secondTeam !== null) {
+      onResolve(firstTeam, secondTeam);
+      setFirstTeam(null);
+      setSecondTeam(null);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <h3 className="text-xl font-bold mb-4">Resolve Tiebreaker</h3>
+        <p className="text-gray-600 mb-4">
+          Position {tieGroup.position}: Select which team should be ranked higher
+        </p>
+        
+        <div className="space-y-3 mb-6">
+          {tieGroup.teams.map((team) => (
+            <div key={team.id} className="flex items-center space-x-3">
+              <input
+                type="radio"
+                id={`first-${team.id}`}
+                name="firstTeam"
+                value={team.id}
+                checked={firstTeam === team.id}
+                onChange={() => setFirstTeam(team.id)}
+                className="w-4 h-4 text-blue-600"
+              />
+              <label htmlFor={`first-${team.id}`} className="font-medium">
+                {team.name} (Higher Rank)
+              </label>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3 mb-6">
+          {tieGroup.teams.map((team) => (
+            <div key={team.id} className="flex items-center space-x-3">
+              <input
+                type="radio"
+                id={`second-${team.id}`}
+                name="secondTeam"
+                value={team.id}
+                checked={secondTeam === team.id}
+                onChange={() => setSecondTeam(team.id)}
+                className="w-4 h-4 text-red-600"
+              />
+              <label htmlFor={`second-${team.id}`} className="font-medium">
+                {team.name} (Lower Rank)
+              </label>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleResolve}
+            disabled={!firstTeam || !secondTeam || firstTeam === secondTeam}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Resolve Tiebreaker
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) => {
   const [matches, setMatches] = useState<MatchResponse[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedMatch, setSelectedMatch] = useState<MatchResponse | null>(null);
   const [selectedMatchForSwap, setSelectedMatchForSwap] = useState<MatchResponse | null>(null);
+  
   // Initialize expandedMatches from localStorage
   const [expandedMatches, setExpandedMatches] = useState<Record<number, boolean>>(() => {
     try {
@@ -27,12 +126,16 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
       return {};
     }
   });
+  
   const [roundTimes, setRoundTimes] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [roundCompletionStatus, setRoundCompletionStatus] = useState<Record<number, any>>({});
+  const [roundCompletionStatus, setRoundCompletionStatus] = useState<Record<number, RoundCompletionStatus>>({});
   const [completingRound, setCompletingRound] = useState<number | null>(null);
   const [hasInitiallyScrolled, setHasInitiallyScrolled] = useState(false);
+  const [tieData, setTieData] = useState<TieData | null>(null);
+  const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
+  const [currentTieGroup, setCurrentTieGroup] = useState<{ position: number; teams: { id: number; name: string }[] } | null>(null);
 
   // Professional scroll restoration approach with multiple fallback strategies
   const preserveScrollPosition = (callback: () => void) => {
@@ -126,7 +229,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
 
   const getRoundType = (roundNumber: number): 'group' | 'knockout' => {
     if (!tournament || tournament.format !== 'group_knockout') {
-      return 'group'; // Default for round-robin
+      return 'group'; // Default for round-robin and swiss
     }
 
     // Calculate group stage rounds
@@ -148,611 +251,589 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     } else {
       // Knockout rounds
       const totalRounds = tournament?.total_rounds || 0;
-      const semiRound = totalRounds - 1;
-      const finalRound = totalRounds;
-      
-      // For group+knockout format, hide round numbers when in semifinal or final stages
-      const isGroupKnockoutFormat = tournament?.format === 'group_knockout';
-      const isKnockoutStage = tournament?.stage === 'semifinal' || 
-                             tournament?.stage === 'semi_final' || 
-                             tournament?.stage === 'final';
-      const hideRoundNumber = isGroupKnockoutFormat && isKnockoutStage && roundType === 'knockout';
-      
-      // Determine title based on the specific round number, not just tournament stage
-      if (roundNumber === semiRound) {
-        return 'Semi Finals';
-      } else if (roundNumber === finalRound) {
-        return 'Final & 3rd Place';
+      if (roundNumber === totalRounds - 1) {
+        return `Round ${roundNumber} (Semi-Finals)`;
+      } else if (roundNumber === totalRounds) {
+        return `Round ${roundNumber} (Finals)`;
       } else {
-        return hideRoundNumber ? 'Knockout' : `Round ${roundNumber} (Knockout)`;
+        return `Round ${roundNumber} (Knockout)`;
       }
     }
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      // Always start with loading state
-      setLoading(true);
-      
-      if (!tournament) {
-        // If no tournament, just stop loading - don't try to fetch data
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const allMatches: MatchResponse[] = [];
-
-        for (let round = 1; round <= tournament.total_rounds; round++) {
-          const res = await apiService.getMatches(tournament.id, round);
-          allMatches.push(...res);
-        }
-
-        const [allPlayers, allTeams] = await Promise.all([
-          apiService.getPlayers(),
-          apiService.getTeams(),
-        ]);
-
-        setMatches(allMatches);
-        setPlayers(allPlayers);
-        setTeams(allTeams);
-
-        const roundTimeMap: Record<number, string> = {};
-        allMatches.forEach((m) => {
-          if (m.scheduled_date && !roundTimeMap[m.round_number]) {
-            roundTimeMap[m.round_number] = new Date(m.scheduled_date).toISOString().slice(0, 16);
-          }
-        });
-        setRoundTimes(roundTimeMap);
-
-        // Load round completion status for admin users
-        if (isAdmin) {
-          for (let round = 1; round <= tournament.total_rounds; round++) {
-            await checkRoundCompletionStatus(round);
-          }
-        }
-
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load schedule:', err);
-        setError('Failed to load schedule');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Reset scroll flag when tournament changes (new tournament or refresh)
-    setHasInitiallyScrolled(false);
-    loadData();
-  }, [tournament?.id, isAdmin]); // Changed dependency to tournament.id instead of tournament object
-
-  // Auto-scroll to current round ONLY on initial load and refresh
-  useEffect(() => {
-    if (!loading && tournament && matches.length > 0 && !hasInitiallyScrolled) {
-      const currentRound = tournament.current_round;
-      if (currentRound > 0) {
-        // Clear all expanded matches first, then auto-expand current round matches
-        updateExpandedMatches(() => {
-          const newExpanded: Record<number, boolean> = {};
-          const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
-          currentRoundMatches.forEach(match => {
-            newExpanded[match.id] = true;
-          });
-          return newExpanded;
-        });
-
-        // Small delay to ensure DOM is fully rendered
-        setTimeout(() => {
-          const currentRoundElement = document.getElementById(`round-${currentRound}`);
-          if (currentRoundElement) {
-            // Calculate the target position accounting for sticky header
-            const elementTop = currentRoundElement.offsetTop;
-            const headerOffset = 80; // Height of sticky header + tabs
-            const targetPosition = Math.max(0, elementTop - headerOffset);
-            
-            // Scroll directly to the calculated position
-            window.scrollTo({
-              top: targetPosition,
-              behavior: 'smooth'
-            });
-          }
-          setHasInitiallyScrolled(true);
-        }, 300);
-      } else {
-        // No current round, just clear expanded matches
-        updateExpandedMatches(() => ({}));
-        setHasInitiallyScrolled(true);
-      }
-    }
-  }, [loading, tournament?.current_round, matches.length, hasInitiallyScrolled, updateExpandedMatches]);
-
-  // Reset scroll flag on unmount
-  useEffect(() => {
-    return () => {
-      setHasInitiallyScrolled(false);
-    };
-  }, []);
-
-  const getPlayer = (id: number) => players.find((p) => p.id === id);
-  
-  const getTeamName = (id: number) => {
-    // Handle placeholder teams for knockout stage
-    if (id < 0) {
-      const placeholderMap: Record<number, string> = {
-        [-1]: "A1", [-2]: "A2", [-3]: "B1", [-4]: "B2",
-        [-5]: "Winner SF1", [-6]: "Winner SF2", 
-        [-7]: "Loser SF1", [-8]: "Loser SF2"
+  const getMatchLabel = (match: MatchResponse): string => {
+    if (match.label && match.label !== 'group') {
+      const labelMap: Record<string, string> = {
+        'SF1': 'Semi-Final 1',
+        'SF2': 'Semi-Final 2',
+        'Final': 'Final',
+        '3rd Place': '3rd Place Match'
       };
-      return placeholderMap[id] || `Placeholder ${id}`;
+      return labelMap[match.label] || match.label;
     }
-    return teams.find((t) => t.id === id)?.name || `Team ${id}`;
-  };
-
-  const getGroupLabel = (teamId: number, roundNumber: number): string => {
-    // Remove group A/B labels in brackets for group+knockout format matches
     return '';
   };
 
-  const getMatchTypeLabel = (match: MatchResponse, roundNumber: number): string => {
-    if (!tournament || getRoundType(roundNumber) !== 'knockout') {
-      return '';
-    }
-
-    const totalRounds = tournament.total_rounds;
-    const finalRound = totalRounds;
-
-    // Only for the final round (which contains both Final and 3rd Place matches)
-    if (roundNumber === finalRound) {
-      // In knockout tournaments, typically the final round has 2 matches:
-      // - One is the Final (between semi-final winners)
-      // - One is the 3rd Place match (between semi-final losers)
-      
-      // We can identify this by looking at team IDs or match order
-      // Usually the Final has higher-ranked teams or comes first
-      // For now, we'll use a simple heuristic based on match ID or team IDs
-      
-      const roundMatches = matches.filter(m => m.round_number === roundNumber);
-      if (roundMatches.length === 2) {
-        // Sort matches by ID to get consistent ordering
-        const sortedMatches = [...roundMatches].sort((a, b) => a.id - b.id);
-        
-        if (match.id === sortedMatches[0].id) {
-          return 'Final';
-        } else {
-          return '3rd Place';
-        }
-      }
-    }
-
-    return '';
+  const getMatchIcon = (match: MatchResponse) => {
+    if (match.label === 'Final') return <Crown className="w-4 h-4 text-yellow-500" />;
+    if (match.label === '3rd Place') return <Medal className="w-4 h-4 text-amber-600" />;
+    if (match.label === 'SF1' || match.label === 'SF2') return <Trophy className="w-4 h-4 text-blue-500" />;
+    return null;
   };
 
-  const groupedByRound = matches.reduce((acc, match) => {
-    acc[match.round_number] = acc[match.round_number] || [];
-    acc[match.round_number].push(match);
-    return acc;
-  }, {} as Record<number, MatchResponse[]>);
-
-  const formatScore = (result: string | null | undefined) => {
-    if (!result || result === 'pending') return '–';
-
-    const score: [number, number] =
-      result === 'white_win' ? [1, 0] :
-      result === 'black_win' ? [0, 1] :
-      result === 'draw' ? [0.5, 0.5] : [0, 0];
-
-    return `${score[0]}–${score[1]}` ;
-  };
-
-  const handleSwapComplete = () => {
-    // Use professional scroll preservation for swap completion
-    preserveScrollPosition(() => {
-      refreshMatchData();
-    });
-  };
-
-  const handleColorSwap = async (matchId: number) => {
-    if (!tournament) return;
-    
-    try {
-      await apiService.swapMatchColors(matchId);
-      
-      // First refresh match data to get updated results
-      await refreshMatchData();
-      
-      // Refresh round completion status for current round since results may have changed
-      if (tournament.current_round > 0 && isAdmin) {
-        await checkRoundCompletionStatus(tournament.current_round);
-      }
-      
-      // Trigger tournament update to refresh standings and statistics
-      await onUpdate();
-      
-      // Finally refresh match data again to ensure all updates are reflected
-      // Use scroll preservation for the final refresh
-      preserveScrollPosition(() => {
-        refreshMatchData();
-      });
-    } catch (error: any) {
-      console.error('Failed to swap colors:', error);
-      alert(error.response?.data?.detail || 'Failed to swap team colors');
-    }
-  };
-
+  // Check if round can be completed
   const checkRoundCompletionStatus = async (roundNumber: number) => {
-    if (!tournament) return;
-    
-    try {
-      const status = await apiService.canCompleteRound(tournament.id, roundNumber);
-      setRoundCompletionStatus(prev => ({ ...prev, [roundNumber]: status }));
-    } catch (error) {
-      console.error(`Failed to check completion status for round ${roundNumber}:`, error);
-    }
-  };
+    if (!tournament || !isAdmin) return;
 
-  const handleCompleteRound = async (roundNumber: number) => {
-    if (!tournament) return;
-    
-    setCompletingRound(roundNumber);
     try {
-      const result = await apiService.completeRound(tournament.id, roundNumber);
+      const roundMatches = matches.filter(m => m.round_number === roundNumber);
+      const unfinishedMatches = roundMatches.filter(m => !m.is_completed).length;
+      const totalMatches = roundMatches.length;
       
-      // Immediately hide the Complete Round button by updating the status
       setRoundCompletionStatus(prev => ({
         ...prev,
-        [roundNumber]: { ...prev[roundNumber], can_complete: false }
+        [roundNumber]: {
+          can_complete: unfinishedMatches === 0,
+          unfinished_matches: unfinishedMatches,
+          total_matches: totalMatches
+        }
       }));
-      
-      // Update tournament data and handle new current round
-      await onUpdate();
-      
-      // Force refresh match data to ensure placeholder replacements are visible
-      // This is especially important after completing final group round or semi-finals
-      await refreshMatchData();
-      
-      // Refresh round completion status for all rounds since advancing stages may affect future rounds
-      if (isAdmin && tournament) {
+    } catch (error) {
+      console.error('Failed to check round completion status:', error);
+    }
+  };
+
+  const loadSchedule = async () => {
+    if (!tournament) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [playersRes, teamsRes] = await Promise.all([
+        apiService.getPlayers(tournament.id),
+        apiService.getTeams(tournament.id)
+      ]);
+
+      setPlayers(playersRes);
+      setTeams(teamsRes);
+
+      const allMatches: MatchResponse[] = [];
+      const times: Record<number, string> = {};
+
+      for (let round = 1; round <= tournament.total_rounds; round++) {
+        const res = await apiService.getMatches(tournament.id, round);
+        allMatches.push(...res);
+        
+        // Extract round start times
+        if (res.length > 0 && res[0].start_date) {
+          times[round] = res[0].start_date;
+        }
+      }
+
+      setMatches(allMatches);
+      setRoundTimes(times);
+
+      // Check round completion status for all rounds
+      if (isAdmin) {
         for (let round = 1; round <= tournament.total_rounds; round++) {
           await checkRoundCompletionStatus(round);
         }
       }
+
+      // Check for ties in standings
+      if (tournament.stage === 'group' && isAdmin) {
+        try {
+          const tieCheckRes = await apiService.checkStandingsTie(tournament.id);
+          setTieData(tieCheckRes);
+        } catch (error) {
+          console.warn('Failed to check standings ties:', error);
+        }
+      }
+
+    } catch (err) {
+      console.error('Failed to load schedule:', err);
+      setError('Failed to load schedule');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSchedule();
+  }, [tournament, isAdmin]);
+
+  // Auto-scroll to current round on initial load
+  useEffect(() => {
+    if (!loading && !hasInitiallyScrolled && tournament && tournament.current_round > 0) {
+      setTimeout(() => {
+        const currentRoundElement = document.getElementById(`round-${tournament.current_round}`);
+        if (currentRoundElement) {
+          const headerOffset = 80;
+          const elementTop = currentRoundElement.offsetTop;
+          const targetPosition = Math.max(0, elementTop - headerOffset);
+          window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+        }
+        setHasInitiallyScrolled(true);
+      }, 500);
+    }
+  }, [loading, hasInitiallyScrolled, tournament]);
+
+  // Check round completion status when matches change
+  useEffect(() => {
+    if (tournament && isAdmin) {
+      for (let round = 1; round <= tournament.total_rounds; round++) {
+        checkRoundCompletionStatus(round);
+      }
+    }
+  }, [matches, tournament, isAdmin]);
+
+  const handleMatchUpdate = () => {
+    preserveScrollPosition(() => {
+      refreshMatchData();
+      onUpdate();
+    });
+  };
+
+  const formatScore = (result: string | null | undefined) => {
+    if (!result || result === 'pending') return '?';
+    
+    const scoreMap: Record<string, string> = {
+      'white_win': '1',
+      'black_win': '0',
+      'draw': '½'
+    };
+    
+    return scoreMap[result] || result;
+  };
+
+  const toggleMatchExpansion = (matchId: number) => {
+    updateExpandedMatches(prev => ({
+      ...prev,
+      [matchId]: !prev[matchId]
+    }));
+  };
+
+  const completeRound = async (roundNumber: number) => {
+    if (!tournament || !isAdmin) return;
+
+    try {
+      setCompletingRound(roundNumber);
+      await apiService.completeRound(tournament.id, roundNumber);
       
-      // If there's a next round, expand its matches and scroll to it
-      const nextRound = roundNumber + 1;
-      const nextRoundMatches = matches.filter(m => m.round_number === nextRound);
-      if (nextRoundMatches.length > 0) {
-        // Expand all matches in the new current round
-        updateExpandedMatches((prev) => {
-          const newExpanded = { ...prev };
-          nextRoundMatches.forEach(match => {
-            newExpanded[match.id] = true;
-          });
-          return newExpanded;
-        });
-        
-        // Scroll to the new current round after a brief delay to allow for data refresh
-        setTimeout(() => {
-          const nextRoundElement = document.getElementById(`round-${nextRound}`);
-          if (nextRoundElement) {
-            const elementTop = nextRoundElement.offsetTop;
-            const headerOffset = 80;
-            const targetPosition = Math.max(0, elementTop - headerOffset);
-            
-            window.scrollTo({
-              top: targetPosition,
-              behavior: 'smooth'
-            });
-          }
-        }, 200); // Increased delay to allow for data refresh
-      }
+      preserveScrollPosition(() => {
+        onUpdate();
+        refreshMatchData();
+      });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'Failed to complete round';
-      if (errorMessage.includes('All matches must be completed')) {
-        alert(`❌ Cannot complete round ${roundNumber}:\n\n${errorMessage}\n\nPlease ensure all matches have results before completing the round.`);
-      } else if (errorMessage.includes('Tiebreakers needed') || errorMessage.includes('Tiebreakers not yet completed')) {
-        alert(`🎯 Round ${roundNumber} has drawn matches that need tiebreakers!\n\nPlease select the winners of the Armageddon games before completing the round.`);
-      } else {
-        alert(`❌ Error: ${errorMessage}`);
-      }
+      console.error('Failed to complete round:', error);
+      alert(error.response?.data?.detail || 'Failed to complete round');
     } finally {
       setCompletingRound(null);
     }
   };
 
-  if (loading) return <div>Loading schedule...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
+  const rescheduleRound = async (roundNumber: number, newDateTime: string) => {
+    if (!tournament || !isAdmin) return;
+
+    try {
+      await apiService.rescheduleRound(tournament.id, roundNumber, { start_date: newDateTime });
+      
+      preserveScrollPosition(() => {
+        refreshMatchData();
+        setRoundTimes(prev => ({ ...prev, [roundNumber]: newDateTime }));
+      });
+    } catch (error: any) {
+      console.error('Failed to reschedule round:', error);
+      alert(error.response?.data?.detail || 'Failed to reschedule round');
+    }
+  };
+
+  const swapTeamColors = async (matchId: number) => {
+    if (!isAdmin) return;
+
+    try {
+      await apiService.swapMatchColors(matchId);
+      preserveScrollPosition(() => {
+        refreshMatchData();
+      });
+    } catch (error: any) {
+      console.error('Failed to swap team colors:', error);
+      alert(error.response?.data?.detail || 'Failed to swap team colors');
+    }
+  };
+
+  const handleTiebreakerResolve = async (firstTeamId: number, secondTeamId: number) => {
+    if (!tournament) return;
+
+    try {
+      await apiService.standingsTiebreaker(tournament.id, { 
+        first_team_id: firstTeamId, 
+        second_team_id: secondTeamId, 
+        group: "1" 
+      });
+      
+      // Refresh tournament data and check for new ties
+      onUpdate();
+      const tieCheckRes = await apiService.checkStandingsTie(tournament.id);
+      setTieData(tieCheckRes);
+    } catch (error: any) {
+      console.error('Failed to resolve tiebreaker:', error);
+      alert(error.response?.data?.detail || 'Failed to resolve tiebreaker');
+    }
+  };
+
+  const getTeamName = (teamId: number): string => {
+    return teams.find(t => t.id === teamId)?.name || `Team ${teamId}`;
+  };
+
+  const getPlayerName = (playerId: number): string => {
+    return players.find(p => p.id === playerId)?.name || `Player ${playerId}`;
+  };
+
+  // Group matches by round
+  const groupedByRound = matches.reduce((acc, match) => {
+    if (!acc[match.round_number]) {
+      acc[match.round_number] = [];
+    }
+    acc[match.round_number].push(match);
+    return acc;
+  }, {} as Record<number, MatchResponse[]>);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <RotateCcw className="w-6 h-6 animate-spin mr-2" />
+        <span>Loading schedule...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <AlertCircle className="w-5 h-5 inline mr-2" />
+        {error}
+      </div>
+    );
+  }
 
   if (!tournament) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <h2 className="text-xl font-semibold text-gray-600 mb-2">No Tournament Available</h2>
-          <p className="text-gray-500">Please create or select a tournament to view the schedule.</p>
-        </div>
+      <div className="text-center text-gray-500 p-8">
+        No tournament selected
       </div>
     );
   }
 
   return (
-    <div style={{ scrollBehavior: 'auto' }}>
-      <h2 className="text-2xl mb-4">Schedule</h2>
-
-      {Object.entries(groupedByRound).map(([roundStr, roundMatches]) => {
-        const round = Number(roundStr);
-        const roundTime = roundTimes[round];
-        const isCurrentRound = tournament?.current_round === round;
-        const isPastRound = tournament && round < tournament.current_round;
-        const isFutureRound = tournament && round > tournament.current_round;
-        
-        let roundClass = "mb-6 border rounded shadow ";
-        if (isCurrentRound) {
-          roundClass += "border-2 border-blue-500 bg-blue-50 shadow-lg";
-        } else if (isPastRound) {
-          roundClass += "bg-gray-100 border-gray-300";
-        } else {
-          roundClass += "bg-gray-50 border-gray-200";
-        }
-
-        return (
-          <div key={round} className={roundClass} style={{ scrollMarginTop: '20px' }}>
-            <div className={`flex justify-between items-center px-4 py-2 ${
-              isCurrentRound ? 'bg-blue-200' : 
-              isPastRound ? 'bg-gray-300' : 'bg-gray-200'
-            }`} id={`round-${round}`}>
-              <h3 className={`text-lg font-semibold ${
-                isCurrentRound ? 'text-blue-800' : 
-                isPastRound ? 'text-gray-600' : 'text-gray-800'
-              }`}>
-                {getRoundTitle(round)} 
-                {isCurrentRound && <span className="ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded">Current</span>}
-              </h3>
-              <div className="flex items-center gap-4">
-                {isAdmin ? (
-                  <>
-                    <input
-                      type="datetime-local"
-                      value={roundTime || ''}
-                      onChange={async (e) => {
-                        const newTime = e.target.value;
-                        setRoundTimes((prev) => ({ ...prev, [round]: newTime }));
-                        try {
-                          await apiService.rescheduleRound(round, newTime);
-                          // Use professional scroll preservation for rescheduling
-                          preserveScrollPosition(() => {
-                            onUpdate();
-                          });
-                        } catch {
-                          alert('Failed to update round schedule');
-                        }
-                      }}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                    {/* Complete Round Button */}
-                    {(() => {
-                      const status = roundCompletionStatus[round];
-                      const isCurrentRound = tournament?.current_round === round;
-                      
-                      // Only show the Complete Round button if it's the current round and can be completed
-                      if (isCurrentRound && status?.can_complete) {
-                        return (
-                          <button
-                            onClick={() => handleCompleteRound(round)}
-                            disabled={completingRound === round}
-                            className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                            title={status.message || `Complete round ${round}`}
-                          >
-                            {completingRound === round ? 'Completing...' : 'Complete Round'}
-                          </button>
-                        );
-                      }
-                      
-                      return null;
-                    })()}
-                  </>
-                ) : (
-                  <span className="text-sm text-gray-700">
-                    {roundTime ? new Date(roundTime).toLocaleString() : 'TBD'}
-                  </span>
-                )}
-              </div>
+    <div className="space-y-6">
+      {/* Tiebreaker Alert */}
+      {tieData && tieData.has_ties && isAdmin && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
+              <span className="font-medium text-yellow-800">
+                Standings ties detected and need manual resolution
+              </span>
             </div>
+            <button
+              onClick={() => {
+                // Show first tie group for resolution
+                const firstTie = Object.entries(tieData.ties)[0];
+                if (firstTie) {
+                  const [position, teamIds] = firstTie;
+                  const tieTeams = teamIds.map(id => ({
+                    id,
+                    name: getTeamName(id)
+                  }));
+                  setCurrentTieGroup({
+                    position: parseInt(position),
+                    teams: tieTeams
+                  });
+                  setShowTiebreakerModal(true);
+                }
+              }}
+              className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+            >
+              Resolve Ties
+            </button>
+          </div>
+        </div>
+      )}
 
-            {roundMatches.map((match) => {
-              const expanded = expandedMatches[match.id] ?? false;
+      {Object.keys(groupedByRound).length === 0 ? (
+        <div className="text-center text-gray-500 p-8">
+          <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+          <p>No matches scheduled yet</p>
+          {isAdmin && tournament.stage === 'not_yet_started' && (
+            <p className="text-sm mt-2">Start the tournament to generate pairings</p>
+          )}
+        </div>
+      ) : (
+        Object.keys(groupedByRound)
+          .map(Number)
+          .sort((a, b) => a - b)
+          .map((roundNumber) => {
+            const roundMatches = groupedByRound[roundNumber];
+            const roundType = getRoundType(roundNumber);
+            const completionStatus = roundCompletionStatus[roundNumber];
+            const isCurrentRound = tournament.current_round === roundNumber;
+            const isCompletingThisRound = completingRound === roundNumber;
 
-              return (
-                <div key={match.id} className="bg-white p-4 border-b">
-                  <div
-                    className="flex justify-between items-center mb-2 cursor-pointer"
-                    onClick={() =>
-                      updateExpandedMatches((prev) => ({
-                        ...prev,
-                        [match.id]: !prev[match.id],
-                      }))
-                    }
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <p className="text-lg font-semibold">
-                          {getTeamName(match.white_team_id)}{getGroupLabel(match.white_team_id, round)} vs {getTeamName(match.black_team_id)}{getGroupLabel(match.black_team_id, round)} (
-                          {match.white_score ?? 0}–{match.black_score ?? 0})
-                        </p>
-                        {/* Match Type Label for Final/3rd Place */}
-                        {getMatchTypeLabel(match, round) && (
-                          <span className={`px-2 py-1 rounded text-sm font-medium ${
-                            getMatchTypeLabel(match, round) === 'Final' 
-                              ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' 
-                              : 'bg-orange-100 text-orange-800 border border-orange-300'
-                          }`}>
-                            {getMatchTypeLabel(match, round)}
+            return (
+              <div
+                key={roundNumber}
+                id={`round-${roundNumber}`}
+                className={`bg-white rounded-lg shadow-sm border border-gray-200 ${
+                  isCurrentRound ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
+                }`}
+              >
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      {roundType === 'knockout' ? (
+                        <Trophy className="w-5 h-5 text-yellow-500" />
+                      ) : (
+                        <Calendar className="w-5 h-5 text-blue-500" />
+                      )}
+                      <h3 className="text-lg font-semibold">
+                        {getRoundTitle(roundNumber)}
+                        {isCurrentRound && (
+                          <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            Current
                           </span>
                         )}
-                      </div>
-                      {/* Match Result Indicator */}
-                      {match.is_completed && (
-                        (() => {
-                          // Check if this match was decided by tiebreaker (regardless of current result)
-                          if (getRoundType(round) === 'knockout' && match.tiebreaker?.is_completed && match.tiebreaker?.winner_team_id) {
-                            return (
-                              <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                {`${getTeamName(match.tiebreaker.winner_team_id)} Winner (Tiebreaker)`}
-                              </span>
-                            );
-                          }
-                          
-                          // For knockout rounds with draws but no completed tiebreaker yet
-                          if (match.result === 'draw' && getRoundType(round) === 'knockout') {
-                            return null; // Don't show anything for incomplete tiebreakers
-                          }
-                          
-                          // For all other cases (regular wins, group stage draws)
-                          return (
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              match.result === 'white_win' ? 'bg-green-100 text-green-800' :
-                              match.result === 'black_win' ? 'bg-green-100 text-green-800' :
-                              match.result === 'draw' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {match.result === 'white_win' ? `${getTeamName(match.white_team_id)} Winner` :
-                               match.result === 'black_win' ? `${getTeamName(match.black_team_id)} Winner` :
-                               match.result === 'draw' ? 'Draw' :
-                               'Result Pending'}
-                            </span>
-                          );
-                        })()
-                      )}
+                      </h3>
                     </div>
-                    <span className="text-sm text-blue-600">
-                      {expanded ? 'Hide Boards ▲' : 'Show Boards ▼'}
-                    </span>
-                  </div>
 
-                  {expanded && (
-                    <div className="text-sm">
-                      {/* Individual Games */}
-                      <div className="grid gap-2">
-                        {match.games.map((game) => {
-                        const board = game.board_number;
-                        const whitePlayer = getPlayer(game.white_player_id);
-                        const blackPlayer = getPlayer(game.black_player_id);
+                    <div className="flex items-center space-x-3">
+                      {/* Round datetime display and scheduling */}
+                      {roundTimes[roundNumber] && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span>
+                            {new Date(roundTimes[roundNumber]).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
 
-                        const leftIcon = board === 1 || board === 3 ? '♔' : '♚';
-                        const rightIcon = board === 1 || board === 3 ? '♚' : '♔';
-
-                        return (
-                          <div key={game.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                            <div className="flex gap-2 items-center w-1/2">
-                              <span>{leftIcon}</span>
-                              <span>{whitePlayer?.name || 'Unknown'}</span>
-                            </div>
-                            <InlineGameResult
-                              game={game}
-                              matchId={match.id}
-                              isAdmin={isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round}
-                              whitePlayerName={whitePlayer?.name || 'Unknown'}
-                              blackPlayerName={blackPlayer?.name || 'Unknown'}
-                              onResultUpdate={() => {
-                                preserveScrollPosition(() => {
-                                  refreshMatchData();
-                                });
-                                if (tournament && round === tournament.current_round) {
-                                  checkRoundCompletionStatus(round);
-                                }
-                              }}
-                            />
-                            <div className="flex gap-2 justify-end items-center w-1/2 text-right">
-                              <span>{blackPlayer?.name || 'Unknown'}</span>
-                              <span>{rightIcon}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      </div>
-
-                      {/* Match-level controls - always show for current round and not completed tournaments */}
-                      {isAdmin && tournament?.stage !== 'completed' && round === tournament?.current_round && (
-                        <div className="flex justify-end mt-2 gap-2">
-                          <button
-                            className="text-sm px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMatchForSwap(match);
+                      {isAdmin && (
+                        <div className="flex items-center space-x-2">
+                          {/* Round scheduling input */}
+                          <input
+                            type="datetime-local"
+                            value={roundTimes[roundNumber] ? new Date(roundTimes[roundNumber]).toISOString().slice(0, 16) : ''}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                rescheduleRound(roundNumber, new Date(e.target.value).toISOString());
+                              }
                             }}
-                            title="Swap players in this match"
-                          >
-                            Swap Players
-                          </button>
-                          
-                          {/* Color swap button - only for knockout matches */}
-                          {getRoundType(round) === 'knockout' && (
+                            className="text-xs border border-gray-300 rounded px-2 py-1 w-36"
+                          />
+
+                          {/* Complete Round Button */}
+                          {completionStatus && (
                             <button
-                              className="text-sm px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleColorSwap(match.id);
-                              }}
-                              title="Swap team colors (white team becomes black, black team becomes white)"
+                              onClick={() => completeRound(roundNumber)}
+                              disabled={!completionStatus.can_complete || isCompletingThisRound}
+                              className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center ${
+                                completionStatus.can_complete
+                                  ? 'bg-green-600 text-white hover:bg-green-700'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
                             >
-                              Swap Colors
+                              {isCompletingThisRound ? (
+                                <RotateCcw className="w-4 h-4 animate-spin mr-1" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                              )}
+                              {completionStatus.can_complete
+                                ? 'Complete Round'
+                                : `${completionStatus.unfinished_matches}/${completionStatus.total_matches} incomplete`
+                              }
                             </button>
                           )}
                         </div>
                       )}
-
-                      {/* Tiebreaker Component - show to all users, but only admins can interact */}
-                      {match.tiebreaker && (
-                        <Tiebreaker
-                          tiebreaker={match.tiebreaker}
-                          whiteTeamName={getTeamName(match.white_team_id)}
-                          blackTeamName={getTeamName(match.black_team_id)}
-                          isAdmin={isAdmin}
-                          onTiebreakerComplete={() => {
-                            // Refresh match data and round completion status
-                            preserveScrollPosition(() => {
-                              refreshMatchData();
-                            });
-                            if (tournament && round === tournament.current_round) {
-                              checkRoundCompletionStatus(round);
-                            }
-                          }}
-                        />
-                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        );
-      })}
 
-      {/* Match Result Modal */}
-      {selectedMatch && (
-        <MatchResult
-          match={selectedMatch}
+                <div className="p-4 space-y-4">
+                  {roundMatches.map((match) => {
+                    const whiteTeam = teams.find(t => t.id === match.white_team_id);
+                    const blackTeam = teams.find(t => t.id === match.black_team_id);
+                    const isExpanded = expandedMatches[match.id];
+                    const matchLabel = getMatchLabel(match);
+                    const matchIcon = getMatchIcon(match);
+
+                    return (
+                      <div
+                        key={match.id}
+                        className="border border-gray-200 rounded-lg overflow-hidden"
+                      >
+                        <div
+                          className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => toggleMatchExpansion(match.id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              {matchIcon}
+                              <div>
+                                <div className="font-medium">
+                                  {whiteTeam?.name || `Team ${match.white_team_id}`} vs{' '}
+                                  {blackTeam?.name || `Team ${match.black_team_id}`}
+                                </div>
+                                {matchLabel && (
+                                  <div className="text-sm text-gray-600">{matchLabel}</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-4">
+                              <div className="text-lg font-bold">
+                                {match.white_score} - {match.black_score}
+                              </div>
+                              
+                              {match.result !== 'pending' && (
+                                <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                  match.result === 'white_win' 
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : match.result === 'black_win'
+                                    ? 'bg-red-100 text-red-800'
+                                    : match.result === 'draw'
+                                    ? 'bg-gray-100 text-gray-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {match.result === 'white_win' 
+                                    ? `${whiteTeam?.name || 'White'} wins`
+                                    : match.result === 'black_win'
+                                    ? `${blackTeam?.name || 'Black'} wins`
+                                    : match.result === 'draw'
+                                    ? 'Draw'
+                                    : 'Tiebreaker'
+                                  }
+                                </div>
+                              )}
+
+                              {isExpanded ? (
+                                <ChevronUp className="w-5 h-5 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="p-4 border-t border-gray-200 bg-white">
+                            <div className="space-y-3">
+                              {match.games && match.games.length > 0 ? (
+                                <div className="grid gap-2">
+                                  {match.games.map((game) => {
+                                    const board = game.board_number;
+                                    const whitePlayer = players.find(p => p.id === game.white_player_id);
+                                    const blackPlayer = players.find(p => p.id === game.black_player_id);
+
+                                    const leftIcon = board === 1 || board === 3 ? '♔' : '♚';
+                                    const rightIcon = board === 1 || board === 3 ? '♚' : '♔';
+
+                                    return (
+                                      <div key={game.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                        <div className="flex gap-2 items-center w-1/2">
+                                          <span>{leftIcon}</span>
+                                          <span>{getPlayerName(game.white_player_id)}</span>
+                                        </div>
+                                        <InlineGameResult
+                                          game={game}
+                                          matchId={match.id}
+                                          isAdmin={isAdmin && tournament?.stage !== 'completed' && roundNumber === tournament?.current_round}
+                                          whitePlayerName={getPlayerName(game.white_player_id)}
+                                          blackPlayerName={getPlayerName(game.black_player_id)}
+                                          onResultUpdate={handleMatchUpdate}
+                                        />
+                                        <div className="flex gap-2 justify-end items-center w-1/2 text-right">
+                                          <span>{getPlayerName(game.black_player_id)}</span>
+                                          <span>{rightIcon}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-center text-gray-500 py-4">
+                                  No games found for this match
+                                </div>
+                              )}
+
+                              {/* Tiebreaker section for knockout matches */}
+                              {roundType === 'knockout' && match.result === 'draw' && match.tiebreaker !== 'no_tiebreaker' && (
+                                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-yellow-800">
+                                      Tiebreaker: {match.tiebreaker === 'pending' ? 'Pending' : 
+                                        match.tiebreaker === 'white_win' ? `${whiteTeam?.name} wins` :
+                                        `${blackTeam?.name} wins`}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Admin controls */}
+                              {isAdmin && (
+                                <div className="flex justify-end space-x-2 pt-3 border-t border-gray-100">
+                                  <button
+                                    onClick={() => setSelectedMatchForSwap(match)}
+                                    className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm flex items-center"
+                                  >
+                                    <Users className="w-3 h-3 mr-1" />
+                                    Swap Players
+                                  </button>
+
+                                  {roundType === 'knockout' && (
+                                    <button
+                                      onClick={() => swapTeamColors(match.id)}
+                                      className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 text-sm flex items-center"
+                                    >
+                                      <Shuffle className="w-3 h-3 mr-1" />
+                                      Swap Colors
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+      )}
+
+      {/* Modals */}
+      {selectedMatchForSwap && (
+        <MatchSwapModal
+          isOpen={true}
+          onClose={() => setSelectedMatchForSwap(null)}
+          match={selectedMatchForSwap}
           players={players}
-          onClose={() => {
-            setSelectedMatch(null);
-            // Use professional scroll preservation technique
-            preserveScrollPosition(() => {
-              refreshMatchData();
-            });
-          }}
+          teams={teams}
+          onSwapComplete={handleMatchUpdate}
         />
       )}
 
-      {/* Match Swap Modal */}
-      {selectedMatchForSwap && (
-        <MatchSwapModal
-          match={selectedMatchForSwap}
-          isOpen={!!selectedMatchForSwap}
-          onClose={() => setSelectedMatchForSwap(null)}
-          onSwapComplete={handleSwapComplete}
-          players={players}
+      {showTiebreakerModal && currentTieGroup && (
+        <TiebreakerModal
+          isOpen={showTiebreakerModal}
+          onClose={() => setShowTiebreakerModal(false)}
+          onResolve={handleTiebreakerResolve}
           teams={teams}
+          tieGroup={currentTieGroup}
         />
       )}
     </div>

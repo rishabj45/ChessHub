@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '@/services/api';
-import { GameResponse } from '@/types';
+import { apiService } from '../services/api';
+import { GameResponse, MatchResult } from '../types';
 
 interface InlineGameResultProps {
   game: GameResponse;
@@ -19,7 +19,7 @@ const InlineGameResult: React.FC<InlineGameResultProps> = ({
   blackPlayerName,
   onResultUpdate 
 }) => {
-  const [currentResult, setCurrentResult] = useState<string>(game.result || 'pending');
+  const [currentResult, setCurrentResult] = useState<MatchResult>(game.result || 'pending');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Update local state when game result changes (e.g., after color swap)
@@ -27,7 +27,7 @@ const InlineGameResult: React.FC<InlineGameResultProps> = ({
     setCurrentResult(game.result || 'pending');
   }, [game.result]);
 
-  const handleResultSelect = async (resultType: string) => {
+  const handleResultSelect = async (resultType: MatchResult) => {
     if (!isAdmin || isSubmitting) return;
     
     // Toggle functionality: if same result is clicked, set to pending
@@ -46,7 +46,7 @@ const InlineGameResult: React.FC<InlineGameResultProps> = ({
     }
   };
 
-  const getResultText = (resultType: string) => {
+  const getResultText = (resultType: MatchResult) => {
     switch (resultType) {
       case 'white_win':
         return whitePlayerName.split(' ')[0]; // First name only for space
@@ -61,7 +61,7 @@ const InlineGameResult: React.FC<InlineGameResultProps> = ({
     }
   };
 
-  const getButtonClass = (buttonType: string) => {
+  const getButtonClass = (buttonType: MatchResult) => {
     const isSelected = currentResult === buttonType;
     const baseClass = "flex items-center justify-center px-2 py-1 rounded text-xs font-medium transition-all min-w-[60px]";
     

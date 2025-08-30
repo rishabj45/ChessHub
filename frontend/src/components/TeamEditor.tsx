@@ -40,8 +40,7 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   const loadTeamPlayers = async () => {
     try {
       setIsLoading(true);
-      const allPlayers = await apiService.getPlayers();
-      const teamPlayers = allPlayers.filter(p => p.team_id === team.id);
+      const teamPlayers = await apiService.getPlayers(team.id);
       setPlayers(teamPlayers);
       setOriginalPlayers([...teamPlayers]); // Deep copy for comparison
     } catch (err: any) {
@@ -70,11 +69,10 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
       const newPlayer = {
         name: newPlayerName.trim(),
         team_id: team.id,
-        position: players.length + 1,
-        rating: typeof newPlayerRating === 'number' ? newPlayerRating : 1200, // Default rating
+        rating: typeof newPlayerRating === 'number' ? newPlayerRating : undefined,
       };
 
-      const createdPlayer = await apiService.addPlayer(newPlayer);
+      const createdPlayer = await apiService.createPlayer(newPlayer);
       setPlayers(prev => [...prev, createdPlayer]);
       setNewPlayerName('');
       setNewPlayerRating('');
@@ -122,8 +120,8 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   const updatePlayerRating = (index: number, newRating: string) => {
     setPlayers(prev => {
       const updated = [...prev];
-      const rating = newRating === '' ? null : parseInt(newRating);
-      updated[index] = { ...updated[index], rating: rating || undefined };
+      const rating = newRating === '' ? 1200 : parseInt(newRating) || 1200;
+      updated[index] = { ...updated[index], rating };
       return updated;
     });
   };
@@ -148,10 +146,9 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
           );
         })
         .map(player => 
-          apiService.updatePlayer(player.id, {
+          apiService.updatePlayer(player.id!, {
             name: player.name,
-            rating: player.rating,
-            position: player.position
+            rating: player.rating
           })
         );
 
@@ -161,7 +158,6 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
       const updatedTeam: Team = {
         ...team,
         name: name.trim(),
-        players: players,
       };
 
       onSave(updatedTeam);

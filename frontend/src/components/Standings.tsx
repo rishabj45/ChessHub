@@ -10,7 +10,7 @@ interface StandingsProps {
 
 const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
   const [standings, setStandings] = useState<StandingsEntry[]>([]);
-  const [groupStandings, setGroupStandings] = useState<{ group_a: any[], group_b: any[] }>({ group_a: [], group_b: [] });
+  const [groupStandings, setGroupStandings] = useState<{ group_a: StandingsEntry[], group_b: StandingsEntry[] }>({ group_a: [], group_b: [] });
   const [tournament, setTournament] = useState<Tournament | null>(null);
 
   useEffect(() => {
@@ -19,12 +19,16 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
         const currentTournament = await apiService.getCurrentTournament();
         setTournament(currentTournament);
 
-        if (currentTournament?.format === 'group_knockout') {
-          const groupData = await apiService.getGroupStandings();
-          setGroupStandings(groupData);
-        } else {
-          const standingsData = await apiService.getStandings();
+        if (currentTournament) {
+          const standingsData = await apiService.getStandings(currentTournament.id);
           setStandings(standingsData.standings);
+          
+          // Group standings by group number for group_knockout format
+          if (currentTournament.format === 'group_knockout') {
+            const groupA = standingsData.standings.filter(s => s.group === 1);
+            const groupB = standingsData.standings.filter(s => s.group === 2);
+            setGroupStandings({ group_a: groupA, group_b: groupB });
+          }
         }
       } catch (error) {
         console.error('Error loading standings:', error);
@@ -54,9 +58,9 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
           </thead>
           <tbody>
             {teams.map((team, idx) => (
-              <tr key={team.id} className={idx < 2 ? 'bg-green-100 border-l-4 border-green-500' : ''}>
+              <tr key={team.team_id} className={idx < 2 ? 'bg-green-100 border-l-4 border-green-500' : ''}>
                 <td className="p-2 font-semibold text-center">{idx + 1}</td>
-                <td className="p-2 text-left">{team.name}</td>
+                <td className="p-2 text-left">{team.team_name}</td>
                 <td className="p-2 text-center">{team.matches_played}</td>
                 <td className="p-2 text-center">{team.wins}</td>
                 <td className="p-2 text-center">{team.draws}</td>
@@ -108,8 +112,8 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
               <h3 className="text-lg font-semibold mb-2">Knockout Bracket</h3>
               <div className="text-sm text-gray-600">
                 <p><strong>Semi-finals:</strong></p>
-                <p>• {groupStandings.group_a[0]?.name} (A1) vs {groupStandings.group_b[1]?.name} (B2)</p>
-                <p>• {groupStandings.group_a[1]?.name} (A2) vs {groupStandings.group_b[0]?.name} (B1)</p>
+                <p>• {groupStandings.group_a[0]?.team_name} (A1) vs {groupStandings.group_b[1]?.team_name} (B2)</p>
+                <p>• {groupStandings.group_a[1]?.team_name} (A2) vs {groupStandings.group_b[0]?.team_name} (B1)</p>
                 <p className="mt-2"><strong>Final:</strong> Winners of semi-finals</p>
                 <p><strong>3rd Place:</strong> Losers of semi-finals</p>
               </div>

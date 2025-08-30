@@ -2,31 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { Users } from 'lucide-react';
 import TeamEditor from './TeamEditor';
 import { apiService } from '@/services/api';
-import { Team, Tournament, Player } from '@/types';
+import { Team, Tournament, Player, TabType } from '@/types';
 
 interface TeamsProps {
   isAdmin: boolean;
   tournament: Tournament | null;
+  onUpdate?: () => void;
+  onTabChange?: (tab: TabType) => void;
 }
 
-const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
+const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament, onUpdate, onTabChange }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     if (!tournament) return;
 
-    // Step 1: Load teams
-    apiService.getTeams().then(allTeams => {
-      const filtered = allTeams.filter(team => team.tournament_id === tournament.id);
-      setTeams(filtered);
-    });
+    // Step 1: Load teams for this tournament
+    apiService.getTeams(tournament.id).then(setTeams);
 
-    // Step 2: Load all players
-    apiService.getPlayers().then(setPlayers);
+    // Step 2: Load all players for this tournament
+    apiService.getPlayers(undefined, tournament.id).then(setPlayers);
   }, [tournament]);
+
+    const handleStartTournament = async () => {
+    if (!tournament) return;
+    
+    setStarting(true);
+    try {
+      await apiService.startTournament(tournament.id);
+      onUpdate?.();
+      onTabChange?.('schedule');
+    } catch (error) {
+      console.error('Failed to start tournament:', error);
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const handleEdit = (team: Team) => {
     setSelectedTeam(team);
@@ -34,12 +50,14 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
   };
 
   const handleSave = async (team: Team) => {
-    await apiService.updateTeam(team.id, team);
+    await apiService.updateTeam(team.id, { name: team.name });
     setTeams(ts => ts.map(t => (t.id === team.id ? team : t)));
     
     // Reload players to reflect any changes made in TeamEditor
-    const updatedPlayers = await apiService.getPlayers();
-    setPlayers(updatedPlayers);
+    if (tournament) {
+      const updatedPlayers = await apiService.getPlayers(undefined, tournament.id);
+      setPlayers(updatedPlayers);
+    }
     
     setShowEditor(false);
   };
@@ -47,15 +65,30 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament }) => {
   const handleClose = async () => {
     // Reload players to reflect any changes made in TeamEditor
     // (since player operations are saved immediately)
-    const updatedPlayers = await apiService.getPlayers();
-    setPlayers(updatedPlayers);
+    if (tournament) {
+      const updatedPlayers = await apiService.getPlayers(undefined, tournament.id);
+      setPlayers(updatedPlayers);
+    }
     
     setShowEditor(false);
   };
 
   return (
     <div>
-      <h2 className="text-2xl mb-4">Teams</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl">Teams</h2>
+        
+        {/* Start Tournament Button */}
+        {isAdmin && tournament && tournament.stage === 'not_yet_started' && (
+          <button
+            onClick={handleStartTournament}
+            disabled={isAdvancing}
+            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-semibold shadow-lg transition-colors duration-200"
+          >
+            {isAdvancing ? 'Starting...' : 'Start Tournament'}
+          </button>
+        )}
+      </div>
 
       {!tournament ? (
         <div className="flex items-center justify-center h-64">

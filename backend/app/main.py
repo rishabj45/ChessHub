@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os, logging
 from contextlib import asynccontextmanager
 from .database import engine, Base
-from .api import tournaments, teams, players, matches, auth, tiebreakers
+from .api import tournaments, teams, players, matches, auth, announcements
 from dotenv import load_dotenv; load_dotenv()
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -50,13 +50,11 @@ app.include_router(tournaments.router)
 app.include_router(teams.router)
 app.include_router(players.router)
 app.include_router(matches.router)
-app.include_router(tiebreakers.router)
+app.include_router(announcements.router)
 
-# At bottom of main.py, after routers:
 frontend_path = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
 app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
 
-# Optional: fallback to index.html (React Router)
 @app.get("/{full_path:path}")
 def spa_fallback():
     return FileResponse(os.path.join(frontend_path, "index.html"))
