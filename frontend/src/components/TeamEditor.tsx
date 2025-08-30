@@ -21,17 +21,14 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if editing is disabled (tournament has started)
   const isEditingDisabled = tournamentStage && tournamentStage !== 'not_yet_started';
 
-  // Load team players when component opens
   useEffect(() => {
     if (isOpen && team.id) {
       loadTeamPlayers();
     }
   }, [isOpen, team.id]);
 
-  // Reset form when team changes
   useEffect(() => {
     setName(team.name);
     setError(null);
@@ -42,7 +39,7 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
       setIsLoading(true);
       const teamPlayers = await apiService.getPlayers(team.id);
       setPlayers(teamPlayers);
-      setOriginalPlayers([...teamPlayers]); // Deep copy for comparison
+      setOriginalPlayers([...teamPlayers]);
     } catch (err: any) {
       setError('Failed to load team players');
       console.error('Error loading players:', err);
@@ -136,7 +133,6 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
       setIsLoading(true);
       setError(null);
 
-      // Update players that have changed
       const playerUpdates = players
         .filter(player => {
           const original = originalPlayers.find(op => op.id === player.id);
@@ -154,7 +150,6 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
 
       await Promise.all(playerUpdates);
 
-      // Create updated team object
       const updatedTeam: Team = {
         ...team,
         name: name.trim(),
@@ -171,7 +166,6 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   };
 
   const handleClose = () => {
-    // Reset form state
     setName(team.name);
     setPlayers([]);
     setOriginalPlayers([]);
@@ -184,155 +178,146 @@ const TeamEditor: React.FC<TeamEditorProps> = ({ team, isOpen, onClose, onSave, 
   if (!isOpen || !isAdmin) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-96 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold">Edit Team</h3>
-          <button 
-            onClick={handleClose}
-            className="text-gray-500 hover:text-gray-700"
-            disabled={isLoading}
-          >
-            <X size={20} />
-          </button>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-blue-600 text-white p-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Edit Team</h3>
+            <button 
+              onClick={handleClose}
+              className="p-1 hover:bg-blue-700 rounded transition-colors"
+              disabled={isLoading}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {/* Tournament Started Alert */}
+          {isEditingDisabled && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg">
+              <strong>Tournament has started</strong> - Teams and players cannot be edited.
+            </div>
+          )}
+
+          {/* Team Name */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Team Name</label>
+            <input
+              className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              disabled={isLoading || isEditingDisabled}
+              placeholder="Enter team name"
+            />
           </div>
-        )}
 
-        {isEditingDisabled && (
-          <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
-            <strong>⚠️ Tournament has started</strong> - Teams and players cannot be edited after the tournament begins.
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="mb-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
-            Loading...
-          </div>
-        )}
-
-        <div className="mb-4">
-          <label className="block mb-1 font-medium text-gray-700">Team Name:</label>
-          <input
-            className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            disabled={isLoading || isEditingDisabled}
-            placeholder="Enter team name"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block mb-1 font-medium text-gray-700">
-            Players ({players.length}/6):
-          </label>
-          
-          {players.length > 0 ? (
-            <div className="mb-3 space-y-2 max-h-60 overflow-y-auto">
+          {/* Players Section */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Players ({players.length}/6)
+            </label>
+            
+            {/* Existing Players */}
+            <div className="space-y-3 mb-4">
               {players.map((player, index) => (
-                <div key={player.id ?? index} className="flex items-center space-x-2 p-2 border border-gray-200 rounded">
-                  <div className="flex-1">
-                    <input
-                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      value={player.name}
-                      onChange={e => updatePlayerName(index, e.target.value)}
-                      disabled={isLoading || isEditingDisabled}
-                      placeholder="Player name"
-                    />
-                  </div>
-                  <div className="w-20">
-                    <input
-                      type="number"
-                      className="w-full border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      value={player.rating || ''}
-                      onChange={e => updatePlayerRating(index, e.target.value)}
-                      disabled={isLoading || isEditingDisabled}
-                      placeholder="Rating"
-                      min="0"
-                      max="3000"
-                    />
-                  </div>
+                <div key={player.id || index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
+                  <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                    {index + 1}
+                  </span>
+                  <input
+                    className="flex-1 border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    value={player.name}
+                    onChange={e => updatePlayerName(index, e.target.value)}
+                    disabled={isLoading || isEditingDisabled}
+                    placeholder="Player name"
+                  />
+                  <input
+                    type="number"
+                    className="w-20 border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    value={player.rating || ''}
+                    onChange={e => updatePlayerRating(index, e.target.value)}
+                    disabled={isLoading || isEditingDisabled}
+                    placeholder="Rating"
+                    min="0"
+                    max="3000"
+                  />
                   <button
                     onClick={() => removePlayer(index)}
-                    className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     disabled={isLoading || players.length <= 4 || isEditingDisabled}
-                    title={
-                      isEditingDisabled 
-                        ? "Cannot edit after tournament starts"
-                        : players.length <= 4 
-                          ? "Minimum 4 players required" 
-                          : "Remove player"
-                    }
+                    title={players.length <= 4 ? "Minimum 4 players required" : "Remove player"}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-gray-500 text-sm mb-3">No players loaded yet...</p>
-          )}
 
-          {/* Add new player form */}
-          {!isEditingDisabled && (
-            <div className="border-t pt-3">
-              <div className="flex items-center space-x-2">
-                <input
-                  className="flex-1 border border-gray-300 px-3 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="New player name"
-                  value={newPlayerName}
-                  onChange={e => setNewPlayerName(e.target.value)}
-                  disabled={isLoading || players.length >= 6}
-                  onKeyPress={e => e.key === 'Enter' && addPlayer()}
-                />
-                <input
-                  type="number"
-                  className="w-20 border border-gray-300 px-2 py-2 rounded text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="Rating"
-                  value={newPlayerRating}
-                  onChange={e =>
-                    setNewPlayerRating(e.target.value === '' ? '' : parseInt(e.target.value))
-                  }
-                  disabled={isLoading || players.length >= 6}
-                  min="0"
-                  max="3000"
-                  onKeyPress={e => e.key === 'Enter' && addPlayer()}
-                />
-                <button
-                  className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={addPlayer}
-                  disabled={!newPlayerName.trim() || isLoading || players.length >= 6}
-                  title={players.length >= 6 ? "Maximum 6 players allowed" : "Add player"}
-                >
-                  <Plus size={16} />
-                </button>
+            {/* Add New Player */}
+            {!isEditingDisabled && players.length < 6 && (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Add New Player</h4>
+                <div className="flex items-center space-x-3">
+                  <input
+                    className="flex-1 border border-gray-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Player name"
+                    value={newPlayerName}
+                    onChange={e => setNewPlayerName(e.target.value)}
+                    disabled={isLoading}
+                    onKeyPress={e => e.key === 'Enter' && newPlayerName.trim() && addPlayer()}
+                  />
+                  <input
+                    type="number"
+                    className="w-20 border border-gray-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rating"
+                    value={newPlayerRating}
+                    onChange={e => setNewPlayerRating(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    disabled={isLoading}
+                    min="0"
+                    max="3000"
+                    onKeyPress={e => e.key === 'Enter' && newPlayerName.trim() && addPlayer()}
+                  />
+                  <button
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center space-x-2"
+                    onClick={addPlayer}
+                    disabled={!newPlayerName.trim() || isLoading}
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add</span>
+                  </button>
+                </div>
               </div>
-              {players.length >= 6 && (
-                <p className="text-sm text-orange-600 mt-1">Maximum 6 players per team</p>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="flex justify-end space-x-2 pt-4 border-t">
+        {/* Footer */}
+        <div className="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
           <button 
-            className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
             onClick={handleClose}
             disabled={isLoading}
           >
             Cancel
           </button>
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center space-x-2"
             onClick={save}
             disabled={!name.trim() || isLoading || isEditingDisabled}
           >
-            <Save className="inline-block mr-1" size={16} />
-            {isLoading ? 'Saving...' : isEditingDisabled ? 'Read Only' : 'Save'}
+            <Save className="h-4 w-4" />
+            <span>{isLoading ? 'Saving...' : 'Save Changes'}</span>
           </button>
         </div>
       </div>

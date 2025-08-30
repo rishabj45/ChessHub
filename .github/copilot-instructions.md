@@ -2,7 +2,7 @@ ChessHub Copilot Instructions
 
 These rules apply to all code Copilot generates in this repository.
 Follow them consistently across backend (FastAPI) and frontend (React+TypeScript).
-Remember i am using vs code in windows so the commands and paths should be windows compatible.
+Remember i am using vs code in windows so the commands and paths should be windows compatible.use correct powershell syntax
 
 1. Project Architecture
 Backend (FastAPI + SQLAlchemy + PostgreSQL)

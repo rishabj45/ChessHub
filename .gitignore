@@ -19,11 +19,13 @@ future_features.txt
 
 # === Node / React Frontend ===
 frontend/node_modules/
-frontend/build/
+frontend/dist/
 frontend/.env
 frontend/.env.*.local
 frontend/yarn.lock
 frontend/pnpm-lock.yaml
+
+
 
 # === Frontend Build Caches (if using Vite, etc.) ===
 frontend/.vite/
