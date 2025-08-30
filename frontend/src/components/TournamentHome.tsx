@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { Tournament } from '@/types';
-import { Trophy, Calendar, MapPin,Target, Crown } from 'lucide-react';
+import { Trophy, Calendar, MapPin,Target, Crown, Edit } from 'lucide-react';
 import {  getStageDisplayText } from '@/utils/helpers';
 import AnnouncementManager from './AnnouncementManager';
+import TournamentEditModal from './TournamentEditModal';
 
 interface TournamentHomeProps {
   tournament?: Tournament | null;
@@ -13,11 +14,8 @@ interface TournamentHomeProps {
 
 const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, onUpdate }) => {
   const [finalRankings, setFinalRankings] = useState<any>(null);
-  const [topThree, setTopThree] = useState<any[]>([]);
   const [groupStandings, setGroupStandings] = useState<{ group_a: any[], group_b: any[] }>({ group_a: [], group_b: [] });
-  const matches = []; // Assuming matches is defined somewhere in the actual code
-  const standings = []; // Assuming standings is defined somewhere in the actual code
-  const bestPlayers = []; // Assuming bestPlayers is defined somewhere in the actual code
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     const loadFinalRankings = async () => {
@@ -151,9 +149,23 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
     <div className="space-y-6">
       {/* Tournament Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
-        <div className="flex items-center mb-4">
-          <Trophy className="h-8 w-8 mr-3" />
-          <h1 className="text-3xl font-bold">{tournament.name}</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <Trophy className="h-8 w-8 mr-3" />
+            <h1 className="text-3xl font-bold">{tournament.name}</h1>
+          </div>
+          
+          {/* Edit Icon - Only show for admins */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              title="Edit Tournament Details"
+            >
+              <Edit className="h-5 w-5 mr-2" />
+              <span className="text-sm font-medium">Edit</span>
+            </button>
+          )}
         </div>
         
         {tournament.description && (
@@ -264,6 +276,16 @@ const TournamentHome: React.FC<TournamentHomeProps> = ({ tournament, isAdmin, on
         isAdmin={isAdmin}
         onUpdate={onUpdate}
       />
+
+      {/* Tournament Edit Modal */}
+      {isAdmin && tournament && (
+        <TournamentEditModal
+          tournament={tournament}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onUpdate={onUpdate}
+        />
+      )}
     </div>
   );
 };

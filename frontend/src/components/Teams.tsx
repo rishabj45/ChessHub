@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users } from 'lucide-react';
+import { Users, Edit, Crown, Star, Trophy, Play } from 'lucide-react';
 import TeamEditor from './TeamEditor';
 import { apiService } from '@/services/api';
 import { Team, Tournament, Player, TabType } from '@/types';
@@ -74,87 +74,142 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament, onUpdate, onTabChang
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl">Teams</h2>
-        
-        {/* Start Tournament Button */}
-        {isAdmin && tournament && tournament.stage === 'not_yet_started' && (
-          <button
-            onClick={handleStartTournament}
-            disabled={isAdvancing}
-            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-semibold shadow-lg transition-colors duration-200"
-          >
-            {isAdvancing ? 'Starting...' : 'Start Tournament'}
-          </button>
-        )}
-      </div>
-
-      {!tournament ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Users className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-600 mb-2">No Tournament Available</h2>
-            <p className="text-gray-500">Please create or select a tournament to view teams.</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header Section */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <Users className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800">Teams</h2>
+              {tournament && (
+                <p className="text-gray-600 text-sm">
+                  {teams.length} team{teams.length !== 1 ? 's' : ''} • {players.length} player{players.length !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
           </div>
+          
+          {/* Start Tournament Button */}
+          {isAdmin && tournament && tournament.stage === 'not_yet_started' && (
+            <button
+              onClick={handleStartTournament}
+              disabled={starting}
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 disabled:opacity-50 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+            >
+              <Play className="h-5 w-5" />
+              <span>{starting ? 'Starting...' : 'Start Tournament'}</span>
+            </button>
+          )}
         </div>
-      ) : teams.length === 0 ? (
-        <p>No teams found for this tournament.</p>
-      ) : (
-        <ul className="mt-4 space-y-4">
-          {teams.map(team => {
-            const teamPlayers = players.filter(p => p.team_id === team.id);
 
-            return (
-              <li key={team.id} className="bg-white p-4 rounded shadow space-y-2">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Users />
-                    <span className="font-semibold">{team.name}</span>
+        {/* Content Section */}
+        {!tournament ? (
+          <div className="flex items-center justify-center h-96 bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="text-center">
+              <div className="p-4 bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                <Trophy className="h-12 w-12 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">No Tournament Selected</h3>
+              <p className="text-gray-500 max-w-sm">Please create or select a tournament to view and manage teams.</p>
+            </div>
+          </div>
+        ) : teams.length === 0 ? (
+          <div className="flex items-center justify-center h-96 bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="text-center">
+              <div className="p-4 bg-blue-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                <Users className="h-12 w-12 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">No Teams Yet</h3>
+              <p className="text-gray-500 max-w-sm">Teams will appear here once they are added to the tournament.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {teams.map(team => {
+              const teamPlayers = players.filter(p => p.team_id === team.id);
+              const averageRating = teamPlayers.length > 0 
+                ? Math.round(teamPlayers.reduce((sum, p) => sum + p.rating, 0) / teamPlayers.length)
+                : 0;
+
+              return (
+                <div key={team.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-200 overflow-hidden">
+                  {/* Team Header */}
+                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg">{team.name}</h3>
+                          <p className="text-blue-100 text-sm">
+                            {teamPlayers.length} player{teamPlayers.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isAdmin && (!tournament || tournament.stage === 'not_yet_started') && (
+                        <button
+                          className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-200"
+                          onClick={() => handleEdit(team)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {isAdmin && (!tournament || tournament.stage === 'not_yet_started') && (
-                    <button
-                      className="px-2 py-1 border rounded text-blue-500"
-                      onClick={() => handleEdit(team)}
-                    >
-                      Edit
-                    </button>
-                  )}
+                  {/* Team Content */}
+                  <div className="p-4">
+                    {teamPlayers.length > 0 ? (
+                      <>
+                        {/* Players List */}
+                        <div className="space-y-2">
+                          {teamPlayers.map((player, index) => (
+                            <div key={player.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors duration-150">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-blue-600 font-semibold text-sm">{index + 1}</span>
+                                </div>
+                                <span className="font-medium text-gray-800">{player.name}</span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <span className="text-sm font-semibold text-gray-600">{player.rating}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="p-3 bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                          <Users className="h-8 w-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-500 text-sm">No players assigned</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                <div className="ml-6 text-sm text-gray-700">
-                  {teamPlayers.length > 0 ? (
-                    <ul className="list-disc space-y-1">
-                      {teamPlayers.map(player => (
-                        <li key={player.id}>
-                          <span>{player.name}</span>
-                          <span className="text-gray-500 ml-2 text-xs">
-                            (Rating: {player.rating})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-400">No players assigned</p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {showEditor && selectedTeam && (
-        <TeamEditor
-          team={selectedTeam}
-          isOpen={showEditor}
-          onClose={handleClose}
-          onSave={handleSave}
-          isAdmin={isAdmin}
-          tournamentStage={tournament?.stage}
-        />
-      )}
+        {/* Team Editor Modal */}
+        {showEditor && selectedTeam && (
+          <TeamEditor
+            team={selectedTeam}
+            isOpen={showEditor}
+            onClose={handleClose}
+            onSave={handleSave}
+            isAdmin={isAdmin}
+            tournamentStage={tournament?.stage}
+          />
+        )}
+      </div>
     </div>
   );
 };

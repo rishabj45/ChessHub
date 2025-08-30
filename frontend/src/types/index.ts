@@ -60,8 +60,8 @@ export interface TournamentUpdate {
   name?: string;
   description?: string;
   venue?: string;
-  start_date?: string;
-  end_date?: string;
+  start_date?: string | null;
+  end_date?: string | null;
   announcement?: string;
 }
 
