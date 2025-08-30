@@ -84,11 +84,6 @@ const Teams: React.FC<TeamsProps> = ({ isAdmin, tournament, onUpdate, onTabChang
             </div>
             <div>
               <h2 className="text-3xl font-bold text-gray-800">Teams</h2>
-              {tournament && (
-                <p className="text-gray-600 text-sm">
-                  {teams.length} team{teams.length !== 1 ? 's' : ''} • {players.length} player{players.length !== 1 ? 's' : ''}
-                </p>
-              )}
             </div>
           </div>
           
