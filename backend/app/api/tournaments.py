@@ -116,7 +116,34 @@ def complete_round(tournament_id: int, round_number: int, db: Session = Depends(
         "message": f"Round {round_number} completed successfully",
     }
 
-@router.get("/tournaments/{tournament_id}/standings/check-tie")
+@router.get("/{tournament_id}/round/{round_number}")
+def get_round_info(
+    tournament_id: int, 
+    round_number: int, 
+    db: Session = Depends(get_db)
+):
+    """Get round information including completion status"""
+    tour = crud.get_tournament(db, tournament_id)
+    if not tour:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tournament not found")
+    
+    round_obj = db.query(Round).filter(
+        Round.tournament_id == tournament_id,
+        Round.round_number == round_number
+    ).first()
+    
+    if not round_obj:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Round not found")
+    
+    return {
+        "round_number": round_obj.round_number,
+        "tournament_id": round_obj.tournament_id,
+        "stage": round_obj.stage.value,
+        "start_date": round_obj.start_date.isoformat() if round_obj.start_date else None,
+        "is_completed": round_obj.is_completed
+    }
+
+@router.get("/{tournament_id}/standings/check-tie")
 def check_standings_tie(
     tournament_id: int,
     db: Session = Depends(get_db)
@@ -132,7 +159,7 @@ def check_standings_tie(
     }
 
 
-@router.get("/tournaments/{tournament_id}/best-players/check-tie")
+@router.get("/{tournament_id}/best-players/check-tie")
 def check_best_players_tie(
     tournament_id: int,
     db: Session = Depends(get_db)
@@ -169,19 +196,40 @@ def standings_tiebreaker(
     second_id = request.get("second_team_id")
     group = request.get("group") 
     
-    if not first_id or not second_id :
+    if not first_id or not second_id or not group:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing required fields")
     
-    if group in ties and first_id in ties[group] and second_id in ties[group][first_id]:
-        team1=db.query(Team).filter(Team.id==first_id).first()
-        team2=db.query(Team).filter(Team.id==second_id).first()
-        team1.manual_tb4,team2.manual_tb4 =team2.manual_tb4,team1.manual_tb4
-        db.commit()
-    else:
+    # Convert to proper types for comparison
+    group_key = str(group) if isinstance(group, int) else group
+    first_team_id = int(first_id)
+    second_team_id = int(second_id)
+    
+    # Check if the teams are actually tied
+    group_ties = ties.get(int(group_key), {})
+    if not group_ties:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, 
-            "The specified teams are not tied in standings"
+            f"No ties found for group {group_key}"
         )
+    
+    # Check if first_team is tied with second_team
+    tied_teams = group_ties.get(first_team_id, [])
+    if second_team_id not in tied_teams:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            f"Teams {first_team_id} and {second_team_id} are not tied in standings"
+        )
+    
+    # Perform the tiebreaker swap
+    team1 = db.query(Team).filter(Team.id == first_team_id).first()
+    team2 = db.query(Team).filter(Team.id == second_team_id).first()
+    
+    if not team1 or not team2:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "One or both teams not found")
+    
+    # Swap the manual tiebreaker values
+    team1.manual_tb4, team2.manual_tb4 = team2.manual_tb4, team1.manual_tb4
+    db.commit()
     return True
 
 @router.post("/{tournament_id}/best-player/tiebreaker")

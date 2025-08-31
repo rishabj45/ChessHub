@@ -104,6 +104,17 @@ class ApiService {
     return res.data;
   }
 
+  async getRoundInfo(tournamentId: number, roundNumber: number): Promise<{
+    round_number: number;
+    tournament_id: number;
+    stage: string;
+    start_date: string | null;
+    is_completed: boolean;
+  }> {
+    const res = await this.client.get(`/tournaments/${tournamentId}/round/${roundNumber}`);
+    return res.data;
+  }
+
   async checkStandingsTie(tournamentId: number): Promise<TieCheckResponse> {
     const res = await this.client.get(`/tournaments/${tournamentId}/standings/check-tie`);
     return res.data;

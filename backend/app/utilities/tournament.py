@@ -515,10 +515,10 @@ def check_standings_tie(db: Session, tournament_id: int) -> dict:
                     team1.sonneborn_berger == team2.sonneborn_berger):
                     tied_with.append(team2.id)
             if tied_with:
-                tied_teams[team1]=tied_with
+                tied_teams[team1.id] = tied_with
         
         if tied_teams:
-            ties_found[group_name] = tied_with
+            ties_found[group_name] = tied_teams
 
     return ties_found
 
