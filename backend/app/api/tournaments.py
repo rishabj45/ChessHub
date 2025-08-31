@@ -92,7 +92,7 @@ def reschedule_round(
     round=db.query(Round).filter(Round.tournament_id==tournament_id,Round.round_number==round_number).first()
     if round:
         round.start_date=req.start_date
-        matches = db.query(Match).filter(Match.round_number == round_number).all()
+        matches = db.query(Match).filter(Match.round_number == round_number).order_by(Match.id).all()
         for m in matches:
             m.start_date = req.start_date
         db.commit()

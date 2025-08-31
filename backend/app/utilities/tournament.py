@@ -372,7 +372,7 @@ def can_complete_round(db: Session, tournament_id: int, round_number: int) -> di
             can_complete= False
             reason= "Cannot complete not current round."
         else:
-            round_matches = db.query(Match).filter(Match.round_id == round_obj.id).all()
+            round_matches = db.query(Match).filter(Match.round_id == round_obj.id).order_by(Match.id).all()
             completed_matches = [m for m in round_matches if m.is_completed]
 
             if len(completed_matches) < len(round_matches):
@@ -501,10 +501,8 @@ def check_standings_tie(db: Session, tournament_id: int) -> dict:
     teams_to_check = 2 if tournament.format == TournamentFormat.group_knockout else 3
     
     for group_name, group_teams in groups.items():
-        if len(group_teams) < teams_to_check:
-            continue
         tied_teams = {}
-        for i in range(teams_to_check):
+        for i in range(min(len(group_teams),teams_to_check)):
             tied_with=[]
             for j in range(len(group_teams)):
                 if i==j:

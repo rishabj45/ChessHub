@@ -155,7 +155,7 @@ def swap_players(
     if not (same_white or same_black):
         raise HTTPException(status_code=400, detail="Players must belong to the same team  of the match")
 
-    games = db.query(Game).filter(Game.match_id == match_id).all()
+    games = db.query(Game).filter(Game.match_id == match_id).order_by(Game.id).all()
 
     game_p1 = None
     game_p2 = None

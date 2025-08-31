@@ -16,8 +16,8 @@ def get_current_tournament(db: Session) -> Optional[models.Tournament]:
         return current
     return db.query(models.Tournament).order_by(models.Tournament.created_at.desc()).first()
 
-def get_tournaments(db: Session, skip: int = 0, limit: int = 100) -> List[models.Tournament]:
-    return db.query(models.Tournament).offset(skip).limit(limit).all()
+def get_tournaments(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Tournament).order_by(models.Tournament.id).offset(skip).limit(limit).all()
 
 def create_tournament(db: Session, tournament: schemas.TournamentCreate) -> models.Tournament:
     return create_tournament_structure(db, tournament)
@@ -56,7 +56,7 @@ def get_team(db: Session, team_id: int) -> Optional[models.Team]:
     return db.query(models.Team).filter(models.Team.id == team_id).first()
 
 def get_teams(db: Session, tournament_id: int) -> List[models.Team]:
-    return db.query(models.Team).filter(models.Team.tournament_id == tournament_id).all()
+    return db.query(models.Team).filter(models.Team.tournament_id == tournament_id).order_by(models.Team.id).all()
         
 def update_team(db: Session, team_id: int, team_update: schemas.TeamUpdate) -> Optional[models.Team]:
     team = get_team(db, team_id)
@@ -89,7 +89,7 @@ def get_players(db: Session, team_id: Optional[int] = None, tournament_id: Optio
         query = query.filter(models.Player.team_id == team_id)
     if tournament_id:
         query = query.join(models.Team, models.Player.team_id == models.Team.id).filter(models.Team.tournament_id == tournament_id)
-    return query.all()
+    return query.order_by(models.Player.id).all()
 
 def create_player(db: Session, player: schemas.PlayerCreate) -> models.Player:
     data = player.model_dump()
@@ -144,14 +144,16 @@ def get_match(db: Session, match_id: int) -> Optional[models.Match]:
     return db.query(models.Match).filter(models.Match.id == match_id).first()
 
 def get_matches(db: Session, round_number: int, tournament_id: int) -> List[models.Match]:
-    
-    matches=db.query(models.Match).filter(models.Match.tournament_id==tournament_id ,models.Match.round_number==round_number)
+    matches = db.query(models.Match).filter(
+        models.Match.tournament_id == tournament_id,
+        models.Match.round_number == round_number
+    ).order_by(models.Match.id).all()
     return matches
 
 def calculate_standings(db: Session, tournament_id: int):
     teams = db.query(models.Team).filter(
         models.Team.tournament_id == tournament_id
-    ).all()
+    ).order_by(models.Team.id).all()
     
     standings = []
     for team in teams:
@@ -178,7 +180,7 @@ def get_best_players(db: Session, tournament_id: int):
         models.Team, models.Player.team_id == models.Team.id
     ).filter(
         models.Team.tournament_id == tournament_id
-    ).all()
+    ).order_by(models.Player.id).all()
     
     player_stats = []
     for player in players:

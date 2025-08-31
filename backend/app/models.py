@@ -25,8 +25,8 @@ class Tournament(Base):
     group_standings_validated = Column(Boolean, default=False)   
     best_players_validated = Column(Boolean, default=False)  
 
-    teams = relationship("Team", back_populates="tournament", cascade="all, delete-orphan")
-    matches = relationship("Match", back_populates="tournament", cascade="all, delete-orphan")
+    teams = relationship("Team", back_populates="tournament", cascade="all, delete-orphan", order_by="Team.id")
+    matches = relationship("Match", back_populates="tournament", cascade="all, delete-orphan", order_by="Match.id")
     rounds = relationship("Round", back_populates="tournament", cascade="all, delete-orphan")
     announcements = relationship("Announcement", back_populates="tournament", cascade="all, delete-orphan")
 
@@ -50,10 +50,10 @@ class Team(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     tournament = relationship("Tournament", back_populates="teams")
-    players = relationship("Player", back_populates="team", cascade="all, delete-orphan", foreign_keys="Player.team_id")
+    players = relationship("Player", back_populates="team", cascade="all, delete-orphan", foreign_keys="Player.team_id", order_by="Player.id")
     captain = relationship("Player", foreign_keys=[captain_id])
-    white_matches = relationship("Match", back_populates="white_team", foreign_keys="Match.white_team_id", cascade="all, delete-orphan")
-    black_matches = relationship("Match", back_populates="black_team", foreign_keys="Match.black_team_id", cascade="all, delete-orphan")
+    white_matches = relationship("Match", back_populates="white_team", foreign_keys="Match.white_team_id", cascade="all, delete-orphan", order_by="Match.id")
+    black_matches = relationship("Match", back_populates="black_team", foreign_keys="Match.black_team_id", cascade="all, delete-orphan", order_by="Match.id")
 
 class Player(Base):
     __tablename__ = "players"
@@ -84,7 +84,7 @@ class Round(Base):
     created_at = Column(DateTime, default=func.now())
 
     tournament = relationship("Tournament", back_populates="rounds")
-    matches = relationship("Match", back_populates="round", cascade="all, delete-orphan")
+    matches = relationship("Match", back_populates="round", cascade="all, delete-orphan", order_by="Match.id")
 
 class Match(Base):
     __tablename__ = "matches"
@@ -108,7 +108,7 @@ class Match(Base):
 
     tournament = relationship("Tournament", back_populates="matches")
     round = relationship("Round", back_populates="matches")
-    games = relationship("Game", back_populates="match", cascade="all, delete-orphan")
+    games = relationship("Game", back_populates="match", cascade="all, delete-orphan", order_by="Game.id")
     white_team = relationship("Team", foreign_keys=[white_team_id], back_populates="white_matches")
     black_team = relationship("Team", foreign_keys=[black_team_id], back_populates="black_matches")
     
