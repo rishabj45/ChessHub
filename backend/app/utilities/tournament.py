@@ -488,7 +488,8 @@ def check_standings_tie(db: Session, tournament_id: int) -> dict:
     teams = db.query(Team).filter(Team.tournament_id == tournament_id).order_by(
         desc(Team.match_points),
         desc(Team.game_points), 
-        desc(Team.sonneborn_berger)
+        desc(Team.sonneborn_berger),
+        (Team.manual_tb4)
     ).all()
 
     groups = {}
@@ -530,7 +531,8 @@ def check_best_players_tie(db: Session, tournament_id: int) -> dict:
         )
     ).order_by(
         desc(Player.points),
-        desc(Player.wins)
+        desc(Player.wins),
+        (Player.manual_tb3)
     ).all()
     
     top_player = tournament_players[0]

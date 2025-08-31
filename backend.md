@@ -191,7 +191,24 @@ ChessHub is a chess tournament management system built with FastAPI, SQLAlchemy,
 }
 ```
 
-#### GET `/api/tournaments/tournaments/{tournament_id}/standings/check-tie`
+#### GET `/api/tournaments/{tournament_id}/round/{round_number}`
+**Description**: Get round information including completion status  
+**Authentication**: None required  
+**Path Parameters**:
+- `tournament_id` (integer): Tournament ID
+- `round_number` (integer): Round number
+**Response**:
+```json
+{
+  "round_number": 1,
+  "tournament_id": 1,
+  "stage": "group",
+  "start_date": "2024-01-01T10:00:00",
+  "is_completed": true
+}
+```
+
+#### GET `/api/tournaments/{tournament_id}/standings/check-tie`
 **Description**: Check for tied positions in standings  
 **Authentication**: None required  
 **Path Parameters**:
@@ -209,7 +226,7 @@ ChessHub is a chess tournament management system built with FastAPI, SQLAlchemy,
 }
 ```
 
-#### GET `/api/tournaments/tournaments/{tournament_id}/best-players/check-tie`
+#### GET `/api/tournaments/{tournament_id}/best-players/check-tie`
 **Description**: Check for tied positions in best players ranking  
 **Authentication**: None required  
 **Path Parameters**:

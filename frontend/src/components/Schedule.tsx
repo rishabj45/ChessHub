@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, CheckCircle, AlertCircle, Users, RotateCcw, Crown, Trophy, Medal, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
 import { apiService } from '../services/api';
-import { MatchResponse, Player, Team, Tournament} from '../types';
+import { MatchResponse, Player, Team, Tournament, TieCheckResponse} from '../types';
 import MatchSwapModal from './MatchSwapModal';
 import InlineGameResult from './InlineGameResult';
 
@@ -17,11 +17,6 @@ interface TiebreakerModalProps {
   onResolve: (firstTeamId: number, secondTeamId: number) => void;
   teams: { id: number; name: string }[];
   tieGroup: { position: number; teams: { id: number; name: string }[] };
-}
-
-interface TieData {
-  has_ties: boolean;
-  ties: Record<string, number[]>;
 }
 
 interface RoundCompletionStatus {
@@ -133,7 +128,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
   const [roundCompletionStatus, setRoundCompletionStatus] = useState<Record<number, RoundCompletionStatus>>({});
   const [completingRound, setCompletingRound] = useState<number | null>(null);
   const [hasInitiallyScrolled, setHasInitiallyScrolled] = useState(false);
-  const [tieData, setTieData] = useState<TieData | null>(null);
+  const [tieData, setTieData] = useState<TieCheckResponse | null>(null);
   const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
   const [currentTieGroup, setCurrentTieGroup] = useState<{ position: number; teams: { id: number; name: string }[] } | null>(null);
 
@@ -541,18 +536,22 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
             <button
               onClick={() => {
                 // Show first tie group for resolution
-                const firstTie = Object.entries(tieData.ties)[0];
-                if (firstTie) {
-                  const [position, teamIds] = firstTie;
-                  const tieTeams = teamIds.map(id => ({
-                    id,
-                    name: getTeamName(id)
-                  }));
-                  setCurrentTieGroup({
-                    position: parseInt(position),
-                    teams: tieTeams
-                  });
-                  setShowTiebreakerModal(true);
+                const groupEntries = Object.entries(tieData.ties);
+                if (groupEntries.length > 0) {
+                  const [groupNumber, groupTies] = groupEntries[0];
+                  const firstTeamTie = Object.entries(groupTies)[0];
+                  if (firstTeamTie) {
+                    const [teamId, tiedTeamIds] = firstTeamTie;
+                    const tieTeams = [parseInt(teamId), ...tiedTeamIds].map(id => ({
+                      id,
+                      name: getTeamName(id)
+                    }));
+                    setCurrentTieGroup({
+                      position: parseInt(teamId),
+                      teams: tieTeams
+                    });
+                    setShowTiebreakerModal(true);
+                  }
                 }
               }}
               className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"

@@ -24,8 +24,8 @@ frontend/.env
 frontend/.env.*.local
 frontend/yarn.lock
 frontend/pnpm-lock.yaml
-
-
+backend/script.py
+backend.md
 
 # === Frontend Build Caches (if using Vite, etc.) ===
 frontend/.vite/

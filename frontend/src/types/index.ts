@@ -234,7 +234,7 @@ export interface BestPlayersTiebreakerRequest {
 export interface TieCheckResponse {
   tournament_id: number;
   has_ties: boolean;
-  ties: any; // Complex nested object structure
+  ties: { [groupNumber: string]: { [teamId: string]: number[] } }; // group -> { teamId -> [tiedTeamIds] }
 }
 
 // Announcement Types
