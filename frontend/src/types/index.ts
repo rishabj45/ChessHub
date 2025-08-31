@@ -237,6 +237,13 @@ export interface TieCheckResponse {
   ties: { [groupNumber: string]: { [teamId: string]: number[] } }; // group -> { teamId -> [tiedTeamIds] }
 }
 
+// Best players tie check response
+export interface BestPlayersTieCheckResponse {
+  tournament_id: number;
+  has_ties: boolean;
+  ties: { [playerId: string]: number[] }; // playerId -> [tiedPlayerIds]
+}
+
 // Announcement Types
 export interface Announcement {
   id: number;

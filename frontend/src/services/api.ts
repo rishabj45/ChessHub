@@ -6,7 +6,7 @@ import {
   Tournament, TournamentCreate, TournamentUpdate, Team, TeamUpdate, Player, PlayerCreate, PlayerUpdate, 
   MatchResponse, StandingsResponse, BestPlayersResponse, LoginRequest, AuthResponse, AuthVerifyResponse,
   SwapPlayersRequest, AvailableSwapsResponse, ResultUpdate, RoundRescheduleRequest,
-  StandingsTiebreakerRequest, BestPlayersTiebreakerRequest, TieCheckResponse,
+  StandingsTiebreakerRequest, BestPlayersTiebreakerRequest, TieCheckResponse, BestPlayersTieCheckResponse,
   Announcement, AnnouncementCreate, AnnouncementUpdate
 } from '@/types';
 
@@ -120,7 +120,7 @@ class ApiService {
     return res.data;
   }
 
-  async checkBestPlayersTie(tournamentId: number): Promise<TieCheckResponse> {
+  async checkBestPlayersTie(tournamentId: number): Promise<BestPlayersTieCheckResponse> {
     const res = await this.client.get(`/tournaments/${tournamentId}/best-players/check-tie`);
     return res.data;
   }
@@ -137,6 +137,10 @@ class ApiService {
 
   async validateStandings(tournamentId: number): Promise<void> {
     await this.client.post(`/tournaments/${tournamentId}/standings/validate`);
+  }
+
+  async validateBestPlayers(tournamentId: number): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/best-players/validate`);
   }
 
   // -- Teams --

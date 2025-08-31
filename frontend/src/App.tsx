@@ -129,7 +129,7 @@ const App: React.FC = () => {
       case 'teams':
         return <Teams isAdmin={isAuthenticated && adminMode} tournament={tournament} onUpdate={handleTournamentUpdate} onTabChange={handleTabChange} />;
       case 'bestPlayers':
-        return <BestPlayers  />;
+        return <BestPlayers isAdmin={isAuthenticated && adminMode} onUpdate={handleTournamentUpdate} />;
       case 'tournaments':
         return <TournamentManager 
           isAdmin={isAuthenticated && adminMode} 
