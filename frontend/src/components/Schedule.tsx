@@ -21,6 +21,14 @@ interface RoundCompletionStatus {
   total_matches: number;
 }
 
+interface RoundInfo {
+  round_number: number;
+  tournament_id: number;
+  stage: string;
+  start_date: string | null;
+  is_completed: boolean;
+}
+
 interface FilterState {
   searchTerm: string;
 }
@@ -51,6 +59,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
   const [hasScrolledToCurrentRound, setHasScrolledToCurrentRound] = useState(false);
   
   const [roundTimes, setRoundTimes] = useState<Record<number, string>>({});
+  const [roundInfo, setRoundInfo] = useState<Record<number, RoundInfo>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roundCompletionStatus, setRoundCompletionStatus] = useState<Record<number, RoundCompletionStatus>>({});
@@ -79,7 +88,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
       
       // Then scroll to the round with smooth behavior
       setTimeout(() => {
-        const headerOffset = 80;
+        const headerOffset = 120; // Increased offset to show round title above current round tag
         const elementTop = roundElement.offsetTop;
         const targetPosition = Math.max(0, elementTop - headerOffset);
         
@@ -140,6 +149,35 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     return teams.find(t => t.id === teamId)?.name || `Team ${teamId}`;
   };
 
+  // Function to get placeholder names for knockout matches when teams are not yet determined
+  const getPlaceholderTeamName = (match: MatchResponse, isWhiteTeam: boolean): string => {
+    if (!match.label || match.label === 'group') {
+      return isWhiteTeam ? 'Team null' : 'Team null';
+    }
+
+    // Generate placeholder names based on match label
+    switch (match.label) {
+      case 'SF1': // Semi-Final 1: A1 vs B2
+        return isWhiteTeam ? 'A1' : 'B2';
+      case 'SF2': // Semi-Final 2: B1 vs A2
+        return isWhiteTeam ? 'B1' : 'A2';
+      case 'Final': // Final: Winner of SF1 vs Winner of SF2
+        return isWhiteTeam ? 'Winner of SF1' : 'Winner of SF2';
+      case '3rd Place': // 3rd Place: Loser of SF1 vs Loser of SF2
+        return isWhiteTeam ? 'Loser of SF1' : 'Loser of SF2';
+      default:
+        return isWhiteTeam ? 'Team null' : 'Team null';
+    }
+  };
+
+  // Enhanced function to get team display name with knockout placeholders
+  const getTeamDisplayName = (teamId: number | null, match: MatchResponse, isWhiteTeam: boolean): string => {
+    if (teamId === null || teamId === undefined) {
+      return getPlaceholderTeamName(match, isWhiteTeam);
+    }
+    return teams.find(t => t.id === teamId)?.name || `Team ${teamId}`;
+  };
+
   const getMatchLabel = (match: MatchResponse): string => {
     if (match.label && match.label !== 'group') {
       const labelMap: Record<string, string> = {
@@ -161,8 +199,8 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     if (filters.searchTerm) {
       const searchLower = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(match => {
-        const whiteTeam = getTeamName(match.white_team_id).toLowerCase();
-        const blackTeam = getTeamName(match.black_team_id).toLowerCase();
+        const whiteTeam = getTeamDisplayName(match.white_team_id, match, true).toLowerCase();
+        const blackTeam = getTeamDisplayName(match.black_team_id, match, false).toLowerCase();
         const matchLabel = getMatchLabel(match).toLowerCase();
         return whiteTeam.includes(searchLower) || 
                blackTeam.includes(searchLower) || 
@@ -230,14 +268,62 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     if (!tournament || !isAdmin) return;
 
     try {
+      // Get round info from API to check if it's already completed
+      const roundInfoData = await apiService.getRoundInfo(tournament.id, roundNumber);
+      setRoundInfo(prev => ({
+        ...prev,
+        [roundNumber]: roundInfoData
+      }));
+
       const roundMatches = matches.filter(m => m.round_number === roundNumber);
       const unfinishedMatches = roundMatches.filter(m => !m.is_completed).length;
       const totalMatches = roundMatches.length;
       
+      // A round can be completed only if:
+      // 1. All matches in the round are completed (unfinishedMatches === 0)
+      // 2. There are actually matches in the round (totalMatches > 0)  
+      // 3. The round itself is not already marked as completed (!roundInfoData.is_completed)
+      const canComplete = totalMatches > 0 && unfinishedMatches === 0 && !roundInfoData.is_completed;
+      
       setRoundCompletionStatus(prev => ({
         ...prev,
         [roundNumber]: {
-          can_complete: unfinishedMatches === 0,
+          can_complete: canComplete,
+          unfinished_matches: unfinishedMatches,
+          total_matches: totalMatches
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to check round completion status:', error);
+    }
+  };
+
+  // Check round completion status with provided matches (for initial load)
+  const checkRoundCompletionStatusWithMatches = async (roundNumber: number, matchesData: MatchResponse[]) => {
+    if (!tournament || !isAdmin) return;
+
+    try {
+      // Get round info from API to check if it's already completed
+      const roundInfoData = await apiService.getRoundInfo(tournament.id, roundNumber);
+      setRoundInfo(prev => ({
+        ...prev,
+        [roundNumber]: roundInfoData
+      }));
+
+      const roundMatches = matchesData.filter(m => m.round_number === roundNumber);
+      const unfinishedMatches = roundMatches.filter(m => !m.is_completed).length;
+      const totalMatches = roundMatches.length;
+      
+      // A round can be completed only if:
+      // 1. All matches in the round are completed (unfinishedMatches === 0)
+      // 2. There are actually matches in the round (totalMatches > 0)  
+      // 3. The round itself is not already marked as completed (!roundInfoData.is_completed)
+      const canComplete = totalMatches > 0 && unfinishedMatches === 0 && !roundInfoData.is_completed;
+      
+      setRoundCompletionStatus(prev => ({
+        ...prev,
+        [roundNumber]: {
+          can_complete: canComplete,
           unfinished_matches: unfinishedMatches,
           total_matches: totalMatches
         }
@@ -279,11 +365,14 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
       setMatches(allMatches);
       setRoundTimes(times);
 
-      // Check round completion status for all rounds
+      // Check round completion status for all rounds after matches are set
       if (isAdmin) {
-        for (let round = 1; round <= tournament.total_rounds; round++) {
-          await checkRoundCompletionStatus(round);
-        }
+        // Wait for next tick to ensure matches state is updated
+        setTimeout(async () => {
+          for (let round = 1; round <= tournament.total_rounds; round++) {
+            await checkRoundCompletionStatusWithMatches(round, allMatches);
+          }
+        }, 0);
       }
 
     } catch (err) {
@@ -523,12 +612,6 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
           ) : (
             <>
               <p className="text-sm mb-4">No matches scheduled yet</p>
-              {isAdmin && tournament.stage === 'not_yet_started' && (
-                <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded-lg inline-block">
-                  <Info className="w-4 h-4 inline mr-1" />
-                  Start the tournament to generate pairings
-                </p>
-              )}
             </>
           )}
         </div>
@@ -643,6 +726,8 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                       const isExpanded = expandedMatches[match.id];
                       const matchLabel = getMatchLabel(match);
                       const matchIcon = getMatchIcon(match);
+                      const hasGames = match.games && match.games.length > 0;
+                      const canExpand = hasGames;
 
                       return (
                         <div
@@ -654,21 +739,21 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                           }`}
                         >
                           <div
-                            className={`p-4 cursor-pointer transition-colors duration-200 ${
+                            className={`p-4 transition-colors duration-200 ${
                               match.is_completed 
                                 ? 'bg-green-50 hover:bg-green-100' 
                                 : 'bg-gray-50 hover:bg-blue-50'
-                            }`}
-                            onClick={() => toggleMatchExpansion(match.id)}
+                            } ${canExpand ? 'cursor-pointer' : 'cursor-default'}`}
+                            onClick={() => canExpand && toggleMatchExpansion(match.id)}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
                                 {matchIcon}
                                 <div>
                                   <div className="font-semibold text-lg">
-                                    {whiteTeam?.name || `Team ${match.white_team_id}`} 
+                                    {getTeamDisplayName(match.white_team_id, match, true)} 
                                     <span className="mx-2 text-gray-400">vs</span>
-                                    {blackTeam?.name || `Team ${match.black_team_id}`}
+                                    {getTeamDisplayName(match.black_team_id, match, false)}
                                   </div>
                                   {matchLabel && (
                                     <div className="text-sm text-blue-600 font-medium flex items-center">
@@ -680,18 +765,7 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                               </div>
 
                               <div className="flex items-center space-x-6">
-                                {/* Enhanced Score Display */}
-                                <div className="text-2xl font-bold bg-white px-4 py-2 rounded-lg shadow-sm border">
-                                  <span className={match.white_score > match.black_score ? 'text-green-600' : 'text-gray-700'}>
-                                    {match.white_score}
-                                  </span>
-                                  <span className="mx-2 text-gray-400">-</span>
-                                  <span className={match.black_score > match.white_score ? 'text-green-600' : 'text-gray-700'}>
-                                    {match.black_score}
-                                  </span>
-                                </div>
-                                
-                                {/* Enhanced Result Badge */}
+                                {/* Enhanced Result Badge - moved to left */}
                                 {match.result !== 'pending' && (
                                   <div className={`px-3 py-2 rounded-full text-sm font-medium flex items-center ${
                                     match.result === 'white_win' 
@@ -707,28 +781,41 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                     {match.result === 'draw' && <Medal className="w-4 h-4 mr-1" />}
                                     {match.result === 'tiebreaker' && <Zap className="w-4 h-4 mr-1" />}
                                     {match.result === 'white_win' 
-                                      ? `${whiteTeam?.name || 'White'} wins`
+                                      ? `${getTeamDisplayName(match.white_team_id, match, true)} `
                                       : match.result === 'black_win'
-                                      ? `${blackTeam?.name || 'Black'} wins`
+                                      ? `${getTeamDisplayName(match.black_team_id, match, false)} `
                                       : match.result === 'draw'
                                       ? 'Draw'
                                       : 'Tiebreaker'
                                     }
                                   </div>
                                 )}
+                                
+                                {/* Enhanced Score Display - fixed width */}
+                                <div className="text-2xl font-bold bg-white px-4 py-2 rounded-lg shadow-sm border w-40 text-center">
+                                  <span className="text-gray-700">
+                                    {match.white_score}
+                                  </span>
+                                  <span className="mx-2 text-gray-400">-</span>
+                                  <span className="text-gray-700">
+                                    {match.black_score}
+                                  </span>
+                                </div>
 
                                 {/* Expand/Collapse Icon */}
-                                {isExpanded ? (
-                                  <ChevronUp className="w-6 h-6 text-gray-400" />
-                                ) : (
-                                  <ChevronDown className="w-6 h-6 text-gray-400" />
+                                {canExpand && (
+                                  isExpanded ? (
+                                    <ChevronUp className="w-6 h-6 text-gray-400" />
+                                  ) : (
+                                    <ChevronDown className="w-6 h-6 text-gray-400" />
+                                  )
                                 )}
                               </div>
                             </div>
                           </div>
 
                           {/* Enhanced Match Details */}
-                          {isExpanded && (
+                          {canExpand && isExpanded && (
                             <div className="border-t border-gray-200 bg-white">
                               <div className="p-6 space-y-4">
                                 {match.games && match.games.length > 0 ? (
@@ -795,8 +882,8 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                           : 'bg-green-100 text-green-800'
                                       }`}>
                                         {match.tiebreaker === 'pending' ? 'Pending Resolution' : 
-                                          match.tiebreaker === 'white_win' ? `${whiteTeam?.name} wins` :
-                                          `${blackTeam?.name} wins`}
+                                          match.tiebreaker === 'white_win' ? `${getTeamDisplayName(match.white_team_id, match, true)} ` :
+                                          `${getTeamDisplayName(match.black_team_id, match, false)} `}
                                       </span>
                                     </div>
                                   </div>
@@ -805,14 +892,6 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                 {/* Enhanced Admin controls */}
                                 {isAdmin && isCurrentRound && (
                                   <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                                    <button
-                                      onClick={() => setSelectedMatchForSwap(match)}
-                                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium flex items-center transition-colors shadow-sm hover:shadow-md"
-                                    >
-                                      <Users className="w-4 h-4 mr-2" />
-                                      Swap Players
-                                    </button>
-
                                     {roundType === 'knockout' && (
                                       <button
                                         onClick={() => swapTeamColors(match.id)}
@@ -822,6 +901,14 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                         Swap Colors
                                       </button>
                                     )}
+
+                                    <button
+                                      onClick={() => setSelectedMatchForSwap(match)}
+                                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium flex items-center transition-colors shadow-sm hover:shadow-md"
+                                    >
+                                      <Users className="w-4 h-4 mr-2" />
+                                      Swap Players
+                                    </button>
                                   </div>
                                 )}
                               </div>
