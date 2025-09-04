@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import TournamentHome from '@/components/TournamentHome';
 import Schedule from '@/components/Schedule';
@@ -55,10 +55,29 @@ const App: React.FC = () => {
     fetchTournament();
   }, []);
 
-  const handleTournamentUpdate = async (shouldChangeTab = false) => {
+  const handleTournamentUpdate = useCallback(async (shouldChangeTab = false) => {
     try {
       const response = await api.getCurrentTournament();
-      setTournament(response);
+      
+      setTournament(prev => {
+        // Prevent unnecessary updates (avoid remount & scroll reset)
+        if (prev && response && prev.id === response.id) {
+          // Do a shallow comparison of key fields that would affect rendering
+          const isEqual = (
+            prev.current_round === response.current_round &&
+            prev.stage === response.stage &&
+            prev.total_rounds === response.total_rounds &&
+            prev.group_standings_validated === response.group_standings_validated &&
+            prev.best_players_validated === response.best_players_validated
+          );
+          
+          if (isEqual) {
+            return prev; // No meaningful changes, keep the same reference
+          }
+        }
+        return response;
+      });
+      
       // Auto-switch to specified tab only if requested
       if (shouldChangeTab && activeTab === 'tournaments') {
         handleTabChange('home');
@@ -66,9 +85,9 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Error refreshing tournament:', err);
     }
-  };
+  }, [activeTab]);
 
-  const handleTournamentCreated = async () => {
+  const handleTournamentCreated = useCallback(async () => {
     try {
       const response = await api.getCurrentTournament();
       setTournament(response);
@@ -77,7 +96,7 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Error refreshing tournament:', err);
     }
-  };
+  }, []);
 
   const handleLogin = async (credentials: { username: string; password: string }) => {
     try {

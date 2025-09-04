@@ -148,16 +148,12 @@ const MatchSwapModal: React.FC<MatchSwapModalProps> = ({
     if (selectedWhitePlayers.length === 2) {
       const player1 = players.find(p => p.id === selectedWhitePlayers[0])?.name;
       const player2 = players.find(p => p.id === selectedWhitePlayers[1])?.name;
-      return `Swap ${player1} ↔ ${player2} (within White team)`;
+      return `Swap ${player1} ↔ ${player2}`;
     } else if (selectedBlackPlayers.length === 2) {
       const player1 = players.find(p => p.id === selectedBlackPlayers[0])?.name;
       const player2 = players.find(p => p.id === selectedBlackPlayers[1])?.name;
-      return `Swap ${player1} ↔ ${player2} (within Black team)`;
-    } else if (selectedWhitePlayers.length === 1 && selectedBlackPlayers.length === 1) {
-      const whitePlayer = players.find(p => p.id === selectedWhitePlayers[0])?.name;
-      const blackPlayer = players.find(p => p.id === selectedBlackPlayers[0])?.name;
-      return `Swap ${whitePlayer} (White) ↔ ${blackPlayer} (Black)`;
-    }
+      return `Swap ${player1} ↔ ${player2} `;
+    } 
     return 'Select players to swap';
   };
 
@@ -248,7 +244,7 @@ const MatchSwapModal: React.FC<MatchSwapModalProps> = ({
 
         <div className="mb-6">
           <p className="text-sm text-gray-600 mb-2">
-            Select 2 players from the same team to swap within that team, or 1 player from each team to swap between teams.
+            Select 2 players from the same team to swap within that team.
           </p>
           
           <div className="p-3 bg-blue-50 border border-blue-200 rounded">
