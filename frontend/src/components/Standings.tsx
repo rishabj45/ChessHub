@@ -217,19 +217,6 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
       <div className="mb-6">
         <h3 className="text-xl font-semibold mb-3 text-gray-800">Group {groupName}</h3>
         
-        {/* Tiebreaker information */}
-        {shouldShowTiebreaker() && tiesData?.ties[groupNumber.toString()] && (
-          <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-4 h-4 text-orange-600" />
-              <span className="text-sm font-medium text-orange-800">Teams with tied positions detected</span>
-            </div>
-            <p className="text-xs text-orange-700">
-              Click on an orange-highlighted team to see which teams it's tied with, then click on a yellow-highlighted team to swap their positions.
-            </p>
-          </div>
-        )}
-        
         <div className="overflow-auto max-h-96">
           <table className="w-full bg-white shadow rounded">
             <thead className="bg-gray-100 sticky top-0 z-10">
@@ -334,6 +321,19 @@ const Standings: React.FC<StandingsProps> = ({ isAdmin, onUpdate }) => {
                   Group standings validated successfully! Tournament has progressed to semi-finals.
                 </div>
               )}
+            </div>
+          )}
+          
+          {/* Consolidated Tiebreaker Information */}
+          {shouldShowTiebreaker() && (
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-medium text-orange-800">Teams with tied positions detected</span>
+              </div>
+              <p className="text-xs text-orange-700">
+                Click on an orange-highlighted team to see which teams it's tied with, then click on a yellow-highlighted team to swap their positions.
+              </p>
             </div>
           )}
           

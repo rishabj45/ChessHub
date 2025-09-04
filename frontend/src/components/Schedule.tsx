@@ -8,6 +8,7 @@ import { apiService } from '../services/api';
 import { MatchResponse, Player, Team, Tournament } from '../types';
 import MatchSwapModal from './MatchSwapModal';
 import InlineGameResult from './InlineGameResult';
+import InlineTiebreaker from './InlineTiebreaker';
 
 interface ScheduleProps {
   isAdmin: boolean;
@@ -774,19 +775,33 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                       ? 'bg-red-100 text-red-800 border border-red-200'
                                       : match.result === 'draw'
                                       ? 'bg-gray-100 text-gray-800 border border-gray-200'
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'white_win'
+                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'black_win'
+                                      ? 'bg-red-100 text-red-800 border border-red-200'
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                                       : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                                   }`}>
                                     {match.result === 'white_win' && <Trophy className="w-4 h-4 mr-1" />}
                                     {match.result === 'black_win' && <Trophy className="w-4 h-4 mr-1" />}
                                     {match.result === 'draw' && <Medal className="w-4 h-4 mr-1" />}
-                                    {match.result === 'tiebreaker' && <Zap className="w-4 h-4 mr-1" />}
-                                    {match.result === 'white_win' 
-                                      ? `${getTeamDisplayName(match.white_team_id, match, true)} `
+                                    {match.result === 'tiebreaker' && match.tiebreaker === 'white_win' && <Trophy className="w-4 h-4 mr-1" />}
+                                    {match.result === 'tiebreaker' && match.tiebreaker === 'black_win' && <Trophy className="w-4 h-4 mr-1" />}
+                                    {match.result === 'tiebreaker' && match.tiebreaker === 'pending' && <Zap className="w-4 h-4 mr-1" />}
+                                    {match.result === 'white_win'
+                                      ? `${getTeamDisplayName(match.white_team_id, match, true)} Wins`
                                       : match.result === 'black_win'
-                                      ? `${getTeamDisplayName(match.black_team_id, match, false)} `
+                                      ? `${getTeamDisplayName(match.black_team_id, match, false)} Wins`
                                       : match.result === 'draw'
                                       ? 'Draw'
-                                      : 'Tiebreaker'
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'white_win'
+                                      ? `${getTeamDisplayName(match.white_team_id, match, true)} (TieBreaker)`
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'black_win'
+                                      ? `${getTeamDisplayName(match.black_team_id, match, false)} (TieBreaker)`
+                                      : match.result === 'tiebreaker' && match.tiebreaker === 'pending'
+                                      ? 'Draw - Tiebreaker Pending'
+                                      : 'Unknown'
                                     }
                                   </div>
                                 )}
@@ -867,26 +882,13 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                 )}
 
                                 {/* Enhanced Tiebreaker section for knockout matches */}
-                                {roundType === 'knockout' && match.result === 'draw' && match.tiebreaker !== 'no_tiebreaker' && (
-                                  <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center">
-                                        <Zap className="w-5 h-5 text-yellow-600 mr-2" />
-                                        <span className="font-semibold text-yellow-800">
-                                          Tiebreaker Status
-                                        </span>
-                                      </div>
-                                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                        match.tiebreaker === 'pending' 
-                                          ? 'bg-yellow-100 text-yellow-800'
-                                          : 'bg-green-100 text-green-800'
-                                      }`}>
-                                        {match.tiebreaker === 'pending' ? 'Pending Resolution' : 
-                                          match.tiebreaker === 'white_win' ? `${getTeamDisplayName(match.white_team_id, match, true)} ` :
-                                          `${getTeamDisplayName(match.black_team_id, match, false)} `}
-                                      </span>
-                                    </div>
-                                  </div>
+                                {roundType === 'knockout' && (match.result === 'draw' || match.result === 'tiebreaker') && match.tiebreaker !== 'no_tiebreaker' && (
+                                  <InlineTiebreaker
+                                    match={match}
+                                    teams={teams}
+                                    isAdmin={isAdmin && isCurrentRound}
+                                    onTiebreakerComplete={handleMatchUpdate}
+                                  />
                                 )}
 
                                 {/* Enhanced Admin controls */}

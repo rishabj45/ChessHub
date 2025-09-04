@@ -87,10 +87,16 @@ def submit_tiebreaker_result(
     if match.tiebreaker == Tiebreaker.no_tiebreaker:
         raise HTTPException(status_code=400, detail="This match has no tiebreaker")
 
-    if update.result not in (MatchResult.white_win, MatchResult.black_win,MatchResult.tiebreaker):
-        raise HTTPException(status_code=400, detail="Tiebreaker must be white_win or black_win or pending")
+    if update.result not in (MatchResult.white_win, MatchResult.black_win, MatchResult.pending):
+        raise HTTPException(status_code=400, detail="Tiebreaker result must be white_win, black_win, or pending")
 
-    match.tiebreaker = update.result
+    # Convert MatchResult to Tiebreaker enum
+    if update.result == MatchResult.white_win:
+        match.tiebreaker = Tiebreaker.white_win
+    elif update.result == MatchResult.black_win:
+        match.tiebreaker = Tiebreaker.black_win
+    else:  # update.result == MatchResult.pending
+        match.tiebreaker = Tiebreaker.pending
     db.commit()
 
     recalculate_round_stats(db, match.tournament_id, match.round_number)

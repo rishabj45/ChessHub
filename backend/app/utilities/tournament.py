@@ -182,7 +182,10 @@ def recalculate_round_stats(db: Session, tournament_id: int, round_number: int):
                         match.result=MatchResult.tiebreaker
                         if match.tiebreaker==Tiebreaker.no_tiebreaker or match.tiebreaker==Tiebreaker.pending:
                             match.tiebreaker=Tiebreaker.pending
-                            match.is_completed=False    
+                            match.is_completed=False
+                        else:
+                            # Tiebreaker has been resolved (white_win or black_win)
+                            match.is_completed=True
                     else:
                         match.result = MatchResult.draw
             else:
