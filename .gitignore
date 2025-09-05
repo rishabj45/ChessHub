@@ -1,47 +1,20 @@
-# === Python / Flask Backend ===
 __pycache__/
-**/__pycache__/
+*.pyc
 *.py[cod]
-**/*.pyc
-/backend/chess_tournament.db
-chess_tournament.log
 .env
-.pytest_cache/
-venv/
 .venv/
+venv/
 *.egg-info/
+.pytest_cache/
+script.py
+backend.md
+frontend.md
 
-# Alembic migration cache (optional)
-backend/alembic/versions/*.pyc
-
-# === Python Test Artifacts ===
-future_features.txt
-
-# === Node / React Frontend ===
 frontend/node_modules/
 frontend/dist/
 frontend/.env
-frontend/.env.*.local
-frontend/yarn.lock
-frontend/pnpm-lock.yaml
-backend/script.py
-backend.md
-
-# === Frontend Build Caches (if using Vite, etc.) ===
 frontend/.vite/
-frontend/.next/
 
-backend_guide.md
-# === Logs and Debug Files ===
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# === Environment and Config Files ===
-.env.*
-
-# === System and Editor ===
 .DS_Store
 .vscode/
-.idea/
