@@ -192,6 +192,14 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
     return '';
   };
 
+  // Function to get group label for group stage matches
+  const getGroupLabel = (match: MatchResponse): string => {
+    if (match.label === 'group' && tournament?.format === 'group_knockout') {
+      return match.group === 1 ? 'Group A' : match.group === 2 ? 'Group B' : `Group ${match.group}`;
+    }
+    return '';
+  };
+
   // Enhanced filtering and sorting
   const filteredAndSortedMatches = useMemo(() => {
     let filtered = matches;
@@ -203,9 +211,11 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
         const whiteTeam = getTeamDisplayName(match.white_team_id, match, true).toLowerCase();
         const blackTeam = getTeamDisplayName(match.black_team_id, match, false).toLowerCase();
         const matchLabel = getMatchLabel(match).toLowerCase();
+        const groupLabel = getGroupLabel(match).toLowerCase();
         return whiteTeam.includes(searchLower) || 
                blackTeam.includes(searchLower) || 
-               matchLabel.includes(searchLower);
+               matchLabel.includes(searchLower) ||
+               groupLabel.includes(searchLower);
       });
     }
 
@@ -760,6 +770,11 @@ const Schedule: React.FC<ScheduleProps> = ({ isAdmin, tournament, onUpdate }) =>
                                     <div className="text-sm text-blue-600 font-medium flex items-center">
                                       <Award className="w-4 h-4 mr-1" />
                                       {matchLabel}
+                                    </div>
+                                  )}
+                                  {getGroupLabel(match) && (
+                                    <div className="text-sm text-green-600 font-medium flex items-center">
+                                      {getGroupLabel(match)}
                                     </div>
                                   )}
                                 </div>

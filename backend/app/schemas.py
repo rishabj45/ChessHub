@@ -95,6 +95,7 @@ class MatchResponse(BaseModel):
     is_completed: bool
     games: List[GameResponse]
     tiebreaker:Tiebreaker
+    group: int
     
     class Config:
         from_attributes = True

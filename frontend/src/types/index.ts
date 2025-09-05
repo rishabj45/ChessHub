@@ -132,6 +132,7 @@ export interface MatchResponse {
   is_completed: boolean;
   games: GameResponse[];
   tiebreaker: Tiebreaker;
+  group: number;
 }
 
 // Standings Types - Matching StandingsEntry schema from CRUD
